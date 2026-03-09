@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "paths": {
+      "@index": ["./"],
+      "@db": ["./db"],
+      "@entities": ["./db/entities"],
+      "@helpers": ["./helpers"],
+      "@types": ["./types"],
+      "@modules": ["./modules"],
+      "@modules/*": ["./modules/*"],
+      "@middlewares": ["./middlewares"],
+      "@configs": ["./configs"],
+      "@acl": ["./acl"]
+    }
+  }
+}

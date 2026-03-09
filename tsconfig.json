@@ -1,0 +1,19 @@
+// tsconfig.json
+{
+  "extends": "./tsconfig.paths.json",
+  "compilerOptions": {
+    "target": "es6",
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "outDir": "./dist",
+    "sourceMap": true,
+    "allowJs": true,
+    "noImplicitAny": true,
+    "experimentalDecorators": true,
+    "esModuleInterop": true,
+    "baseUrl": "./src"
+  },
+  "emitDecoratorMetadata": true,
+  "include": ["src/**/*.ts", "src/types/types.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,6 @@
+changeLogFile=changelog.xml
+liquibase.command.url=jdbc:postgresql://localhost:5432/workspace
+liquibase.command.username: <<db username>>
+liquibase.command.password: <<db password>>
+liquibase.command.defaultSchemaName: <<table name>>
+liquibase.hub.mode=off

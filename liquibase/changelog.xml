@@ -1,0 +1,211 @@
+<?xml version="1.1" encoding="UTF-8" standalone="no"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="
+        http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet author="Dhiraj Jatav" id="1">
+        <createTable tableName="users">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="first_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="last_name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="email" type="VARCHAR(255)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+
+            <column name="password" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="phone" type="VARCHAR(15)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+
+            <column name="role" type="ENUM('USER','ADMIN')" defaultValue="USER">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="address" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="city" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="pincode" type="VARCHAR(6)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="state" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="login_otp" type="VARCHAR(6)"/>
+
+            <column name="login_otp_expiration" type="TIMESTAMP"/>
+
+            <column name="reset_token" type="VARCHAR(255)"/>
+
+            <column name="reset_token_expiration" type="TIMESTAMP"/>
+
+            <column name="created_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="updated_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="users"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="Dhiraj Jatav" id="2">
+        <createTable tableName="categories">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="category_name" type="VARCHAR(50)">
+                <constraints nullable="false" unique="true"/>
+            </column>
+
+            <column name="created_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="updated_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <rollback>
+            <dropTable tableName="categories"/>
+        </rollback>
+    </changeSet>
+
+    <changeSet author="Dhiraj Jatav" id="3">
+
+        <createTable tableName="products">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="category_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="name" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="description" type="TEXT"/>
+
+            <column name="price" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="discount" type="DECIMAL(10,2)" defaultValueNumeric="0"/>
+
+            <column name="rating" type="DECIMAL(2,1)" defaultValueNumeric="0"/>
+
+            <column name="stock" type="INT" defaultValueNumeric="0"/>
+
+            <column name="is_trending" type="BOOLEAN" defaultValueBoolean="false"/>
+
+            <column name="created_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="updated_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint
+            baseTableName="products"
+            baseColumnNames="category_id"
+            referencedTableName="categories"
+            referencedColumnNames="id"
+            constraintName="fk_products_category"/>
+
+    
+        <rollback>
+            <dropForeignKeyConstraint 
+                baseTableName="products" 
+                constraintName="fk_products_category"/>
+                    <dropTable tableName="products"/>
+            </rollback>
+    </changeSet>
+
+    <changeSet author="Dhiraj Jatav" id="4">
+        <createTable tableName="product_images">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+
+            <column name="product_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="image_url" type="VARCHAR(250)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="public_id" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>        
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="product_images"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="fk_product_images"
+        />
+
+        <rollback>
+            <dropForeignKeyConstraint
+                baseTableName="product_images"
+                constraintName="fk_product_images"
+            />
+            <dropTable tableName="product_images"/>
+        </rollback>
+    </changeSet>
+
+
+</databaseChangeLog>
