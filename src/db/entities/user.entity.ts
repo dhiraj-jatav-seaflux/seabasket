@@ -1,5 +1,6 @@
 import { UserRole } from "@types";
-import { Column, CreateDateColumn, Entity, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { ReviewsEntity } from "./reviews.entity";
 
 @Entity("users")
 export class UserEntity {
@@ -53,4 +54,7 @@ export class UserEntity {
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @OneToMany(() => ReviewsEntity, (review) => review.user)
+  reviews: ReviewsEntity[];
 }

@@ -1,4 +1,4 @@
-import { UserEntity } from "@entities";
+import { ProductsEntity, ReviewsEntity, UserEntity } from "@entities";
 import {
   encode,
   decode,
@@ -33,7 +33,7 @@ export async function signUpUser(
     const userRepository = getRepo(UserEntity);
 
     const existingUser = await userRepository.findOne({
-      where: { email },
+      where: [{ email }, { phone }],
     });
 
     if (existingUser) {
@@ -58,7 +58,7 @@ export async function signUpUser(
 
     await userRepository.save(user);
 
-    // const token = encode({ id: user.id });
+    const token = encode({ id: user.id });
 
     res.status(200).json({
       data: {
@@ -66,7 +66,7 @@ export async function signUpUser(
         first_name: user.first_name,
         last_name: user.last_name,
         email: user.email,
-        // token,
+        token,
       },
     });
   } catch (err) {
@@ -111,12 +111,12 @@ export async function signInUser(
     await sendEmail(user.email, otp);
 
     const token = encode({
-      id:user.id
+      id: user.id,
     });
 
     res.status(200).json({
       message: "OTP sent to your email",
-      token: token
+      token: token,
     });
   } catch (err) {
     next(err);
@@ -129,7 +129,6 @@ export async function verifyLoginOtp(
   next: NextFunction,
 ) {
   try {
-
     const { otp } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
 
@@ -170,11 +169,60 @@ export async function verifyLoginOtp(
       data: {
         id: user.id,
         email: user.email,
-        token:encode({ id: user.id, email:user.email, role:user.role})
+        token: encode({ id: user.id, email: user.email, role: user.role }),
       },
     });
   } catch (err) {
     next(err);
+  }
+}
+
+export async function resendOtp(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) {
+      return next({ status: 401, message: "Token missing" });
+    }
+    const decoded = decode<{ id: number }>(token);
+
+    if (!decoded) {
+      return next({ status: 401, message: "Invalid token" });
+    }
+
+    const userRepository = getRepo(UserEntity);
+
+    const user = await userRepository.findOne({
+      where: { id: decoded.id },
+    });
+
+    if (!user) {
+      return next({ status: 400, message: "User not found" });
+    }
+
+    const otp = generateOTP();
+    const expiration = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.login_otp = otp;
+    user.login_otp_expiration = expiration;
+
+    await userRepository.save(user);
+
+    await sendEmail(user.email, otp);
+
+    const newToken = encode({
+      id: user.id,
+    });
+
+    res.status(200).json({
+      message: "OTP sent to your email",
+      token: newToken,
+    });
+  } catch (error) {
+    next(error);
   }
 }
 
@@ -255,7 +303,17 @@ export async function getUser(
   next: NextFunction,
 ) {
   try {
-    const { id, first_name,last_name, email,phone,address,city,pincode,state } = req.me;
+    const {
+      id,
+      first_name,
+      last_name,
+      email,
+      phone,
+      address,
+      city,
+      pincode,
+      state,
+    } = req.me;
     res.status(200).json({
       data: {
         id,
@@ -266,7 +324,7 @@ export async function getUser(
         address,
         city,
         pincode,
-        state
+        state,
       },
     });
   } catch (err) {
@@ -274,29 +332,33 @@ export async function getUser(
   }
 }
 
-export async function updateUser(req:TRequest, res:TResponse, next:NextFunction){
-  const {userId} = req.params;
+export async function updateUser(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  const { userId } = req.params;
   const {
-      first_name,
-      last_name,
-      email,
-      password,
-      phone,
-      address,
-      city,
-      pincode,
-      state,
-    } = req.dto;
+    first_name,
+    last_name,
+    email,
+    password,
+    phone,
+    address,
+    city,
+    pincode,
+    state,
+  } = req.dto;
 
   try {
     const userRepository = getRepo(UserEntity);
 
     const user = await userRepository.findOne({
-      where: {id: Number(userId)}
-    })
+      where: { id: Number(userId) },
+    });
 
-    if(!user){
-      return res.status(400).json({message:'User does not exist'})
+    if (!user) {
+      return res.status(400).json({ message: "User does not exist" });
     }
 
     user.first_name = first_name;
@@ -311,9 +373,59 @@ export async function updateUser(req:TRequest, res:TResponse, next:NextFunction)
 
     await userRepository.save(user);
 
-    res.status(200).json({message:"User updated successfully"})
-
+    res.status(200).json({ message: "User updated successfully" });
   } catch (error) {
-    next(error)
+    next(error);
+  }
+}
+
+export async function addReview(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  try {
+    const productId = Number(req.params.productId);
+    const { id } = req.me;
+
+    const { comment } = req.body;
+    const { rating } = req.body;
+
+    const productRepo = getRepo(ProductsEntity);
+    const product = await productRepo.findOne({
+      where: { id: productId },
+    });
+
+    const reviewsRepo = getRepo(ReviewsEntity);
+
+    if (!product) {
+      return res.status(404).json({ message: "Product does not exist" });
+    }
+
+    const alreadyReviewed = reviewsRepo.findOne({
+      where: {
+        id: productId,
+        user_id: id,
+      },
+    });
+
+    if (alreadyReviewed) {
+      return res
+        .status(409)
+        .json({ message: "Review already added for this product" });
+    }
+
+    const review = reviewsRepo.create({
+      product_id: productId,
+      user_id: id,
+      rating: rating,
+      comment,
+    });
+
+    await reviewsRepo.save(review);
+
+    res.status(200).json({ message: "Review added", review: review });
+  } catch (error) {
+    next(error);
   }
 }
