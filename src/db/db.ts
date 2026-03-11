@@ -1,4 +1,4 @@
-import { CategoriesEntity, ProductImagesEntity, ProductsEntity, UserEntity } from "@entities";
+import { CategoriesEntity, ProductImagesEntity, ProductsEntity, ReviewsEntity, UserEntity } from "@entities";
 import { envValidator, getLogger } from "@helpers";
 import { DataSource } from "typeorm";
 
@@ -17,8 +17,12 @@ export const initializeDB = async () => {
       username: envs.dbUser,
       password: envs.dbPassword,
       database: envs.dbName,
-      // schema: envs.dbSchema,
-      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity],
+      ssl: {
+        rejectUnauthorized: false,
+      },
+      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity, ReviewsEntity],
+      synchronize:false,
+      logging:false
     });
 
     try {
