@@ -1,19 +1,24 @@
-// tsconfig.json
 {
   "extends": "./tsconfig.paths.json",
   "compilerOptions": {
-    "target": "es6",
+    "target": "ES2020",
     "module": "NodeNext",
     "moduleResolution": "nodenext",
+    "rootDir": "./src",
     "outDir": "./dist",
     "sourceMap": true,
     "allowJs": true,
     "noImplicitAny": true,
     "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
     "esModuleInterop": true,
-    "baseUrl": "./src"
+    "baseUrl": "./src",
+    "skipLibCheck": true
   },
-  "emitDecoratorMetadata": true,
   "include": ["src/**/*.ts", "src/types/types.ts"],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "src/__test__",
+    "**/*.test.ts"
+  ]
 }
