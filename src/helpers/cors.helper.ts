@@ -9,7 +9,7 @@ const corsOptions: CorsOptions = {
     if (whitelistEnvs.includes(process.env.NODE_ENV)) {
       callback(null, true);
     } else {
-      const whitelist = process.env.CORS_DOMAIN.split(",");
+      const whitelist = (process.env.CORS_DOMAIN || "").split(",");
       if (whitelist.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
