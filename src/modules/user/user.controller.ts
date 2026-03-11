@@ -64,7 +64,7 @@ export async function signUpUser(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp);
+    sendEmail(user.email, otp).catch(console.error);
 
     const token = encode({ id: user.id });
 
@@ -116,7 +116,7 @@ export async function signInUser(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp);
+    sendEmail(user.email, otp).catch(console.error);
 
     const token = encode({
       id: user.id,
@@ -219,7 +219,7 @@ export async function resendOtp(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp);
+    sendEmail(user.email, otp).catch(console.error);
 
     const newToken = encode({
       id: user.id,
@@ -259,7 +259,7 @@ export async function forgotPassword(
 
     await userRepository.save(user);
 
-    await sendResetEmail(user.email, token);
+    sendResetEmail(user.email, token).catch(console.error);
 
     res
       .status(200)
@@ -410,7 +410,7 @@ export async function addReview(
       return res.status(404).json({ message: "Product does not exist" });
     }
 
-    const alreadyReviewed = reviewsRepo.findOne({
+    const alreadyReviewed = await reviewsRepo.findOne({
       where: {
         id: productId,
         user_id: id,
