@@ -10,10 +10,10 @@ import {
 } from "typeorm";
 import { CategoriesEntity } from "./categories.entity";
 import { ProductImagesEntity } from "./product-images.entity";
+import { ReviewsEntity } from "./reviews.entity";
 
 @Entity("products")
 export class ProductsEntity {
-
   @PrimaryGeneratedColumn()
   id: number;
 
@@ -21,10 +21,15 @@ export class ProductsEntity {
   @JoinColumn({ name: "category_id" })
   category: CategoriesEntity;
 
-  @OneToMany(() => ProductImagesEntity, (image) => image.product,{cascade:true})
+  @OneToMany(() => ProductImagesEntity, (image) => image.product, {
+    cascade: true,
+  })
   images: ProductImagesEntity[];
 
-  @Column({ type: "int", nullable:false })
+  @OneToMany(() => ReviewsEntity, (review) => review.product)
+  reviews: ReviewsEntity[];
+
+  @Column({ type: "int", nullable: false })
   category_id: number;
 
   @Column({ type: "varchar", length: 100, nullable: false })
@@ -52,5 +57,5 @@ export class ProductsEntity {
   created_at: Date;
 
   @UpdateDateColumn()
-  updated_at: Date; 
+  updated_at: Date;
 }
