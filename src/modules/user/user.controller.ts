@@ -56,7 +56,15 @@ export async function signUpUser(
       state,
     });
 
+    const otp = generateOTP();
+    const expiration = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.login_otp = otp;
+    user.login_otp_expiration = expiration;
+
     await userRepository.save(user);
+
+    await sendEmail(user.email, otp);
 
     const token = encode({ id: user.id });
 
