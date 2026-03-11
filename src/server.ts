@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import { initializeDB } from "@db";
 import {
   EnvSchema,
@@ -12,7 +13,6 @@ import express from "express";
 import helmet from "helmet";
 import methodOverride from "method-override";
 import morgan from "morgan";
-import "reflect-metadata";
 import { configureRoutes } from "./routes";
 import cloudinary from "configs/cloudinary";
 

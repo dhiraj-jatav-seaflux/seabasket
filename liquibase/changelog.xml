@@ -216,15 +216,21 @@
             <column name="user_id" type="INT">
                 <constraints nullable="false"/>
             </column>
-            <column name="created_at" type="TIMESTAMP" >
-            </column>
+            <column name="created_at" type="TIMESTAMP"/>
         </createTable>
         <addForeignKeyConstraint
             baseTableName="carts"
             baseColumnNames="user_id"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            constraintName="fk_users_carts"
         />
         <rollback>
-            </dropTable tableName="carts">
+            <dropForeignKeyConstraint
+                baseTableName="carts"
+                constraintName="fk_users_carts"
+            />
+            <dropTable tableName="carts"/>
         </rollback>
     </changeSet>
 
