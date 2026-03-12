@@ -64,7 +64,7 @@ export async function signUpUser(
 
     await userRepository.save(user);
 
-    sendEmail(user.email, otp).catch(console.error);
+    await sendEmail(user.email, otp)
 
     const token = encode({ id: user.id });
 
@@ -116,7 +116,7 @@ export async function signInUser(
 
     await userRepository.save(user);
 
-    sendEmail(user.email, otp).catch(console.error);
+    await sendEmail(user.email, otp)
 
     const token = encode({
       id: user.id,
@@ -219,7 +219,7 @@ export async function resendOtp(
 
     await userRepository.save(user);
 
-    sendEmail(user.email, otp).catch(console.error);
+    await sendEmail(user.email, otp)
 
     const newToken = encode({
       id: user.id,
@@ -259,7 +259,7 @@ export async function forgotPassword(
 
     await userRepository.save(user);
 
-    sendResetEmail(user.email, token).catch(console.error);
+    await sendResetEmail(user.email, token)
 
     res
       .status(200)
