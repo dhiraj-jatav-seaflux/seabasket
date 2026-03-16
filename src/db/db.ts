@@ -1,6 +1,7 @@
-import { CategoriesEntity, ProductImagesEntity, ProductsEntity, ReviewsEntity, UserEntity } from "@entities";
+import { CartsEntity, CategoriesEntity, OrderEntity, OrderItemsEntity, ProductImagesEntity, ProductsEntity, ReviewsEntity, UserEntity } from "@entities";
 import { envValidator, getLogger } from "@helpers";
 import { DataSource } from "typeorm";
+import { CartItemsEntity } from "./entities/cart-items.entity";
 
 let dataSource: DataSource | null = null;
 
@@ -20,7 +21,7 @@ export const initializeDB = async () => {
       ssl: {
         rejectUnauthorized: false,
       },
-      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity, ReviewsEntity],
+      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity, ReviewsEntity,CartsEntity,CartItemsEntity, OrderEntity, OrderItemsEntity],
       synchronize:false,
       logging:false
     });

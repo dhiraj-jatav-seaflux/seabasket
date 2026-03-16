@@ -11,6 +11,8 @@ import {
 import { CategoriesEntity } from "./categories.entity";
 import { ProductImagesEntity } from "./product-images.entity";
 import { ReviewsEntity } from "./reviews.entity";
+import { CartItemsEntity } from "./cart-items.entity";
+import { OrderItemsEntity } from "./order-items.entity";
 
 @Entity("products")
 export class ProductsEntity {
@@ -28,6 +30,12 @@ export class ProductsEntity {
 
   @OneToMany(() => ReviewsEntity, (review) => review.product)
   reviews: ReviewsEntity[];
+
+  @OneToMany(() => CartItemsEntity, (item) => item.product)
+  cartItems: CartItemsEntity[];
+
+  @OneToMany(() => OrderItemsEntity, (item) => item.product)
+  orderItems: OrderItemsEntity[];
 
   @Column({ type: "int", nullable: false })
   category_id: number;

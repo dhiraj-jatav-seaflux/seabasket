@@ -5,7 +5,6 @@
     xsi:schemaLocation="
         http://www.liquibase.org/xml/ns/dbchangelog
         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
-
     <changeSet author="Dhiraj Jatav" id="1">
         <createTable tableName="users">
             <column name="id" type="INT" autoIncrement="true">
@@ -207,7 +206,6 @@
             <dropTable tableName="reviews"/>
         </rollback>
     </changeSet>
-
     <changeSet author="Dhiraj Jatav" id="6">
         <createTable tableName="carts">
             <column name="id" type="INT" autoIncrement="true">
@@ -216,7 +214,12 @@
             <column name="user_id" type="INT">
                 <constraints nullable="false"/>
             </column>
-            <column name="created_at" type="TIMESTAMP"/>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
         </createTable>
         <addForeignKeyConstraint
             baseTableName="carts"
@@ -233,5 +236,163 @@
             <dropTable tableName="carts"/>
         </rollback>
     </changeSet>
-
+    <changeSet author="Dhiraj Jatav" id="7">
+        <createTable tableName="cart_items">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="cart_id" type="INT" >
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="INT" >
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="INT" defaultValue="1" >
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="cart_items"
+            baseColumnNames="cart_id"
+            referencedTableName="carts"
+            referencedColumnNames="id"
+            constraintName="fk_cart_items_cart"
+            onDelete="CASCADE"
+        />
+        <addForeignKeyConstraint
+            baseTableName="cart_items"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="fk_cart_items_products"
+        />
+        <addUniqueConstraint
+            tableName="cart_items"
+            columnNames="cart_id, product_id"
+            constraintName="uk_cart_product"
+        />
+        <rollback>
+            <dropForeignKeyConstraint
+                baseTableName="cart_items"
+                constraintName="fk_cart_items_cart"
+            />
+            <dropForeignKeyConstraint
+                baseTableName="cart_items"
+                constraintName="fk_cart_items_products"
+            />
+             <dropUniqueConstraint
+                tableName="cart_items"
+                constraintName="uk_cart_product"
+            />
+            <dropTable tableName="cart_items"/>
+        </rollback>
+    </changeSet>
+    <changeSet author="Dhiraj Jatav" id="8">
+        <createTable tableName="orders">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="user_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="total_amount" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="status"
+                    type="ENUM('PENDING','PAID','CANCELLED','SHIPPED','DELIVERED')"
+                    defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addForeignKeyConstraint
+            baseTableName="orders"
+            baseColumnNames="user_id"
+            referencedTableName="users"
+            referencedColumnNames="id"
+            constraintName="fk_orders_users"
+        />
+        <rollback>
+            <dropForeignKeyConstraint
+                baseTableName="orders"
+                constraintName="fk_orders_users"/>
+            <dropTable tableName="orders"/>
+        </rollback>
+    </changeSet>
+    <changeSet author="Dhiraj Jatav" id="9">
+        <createTable tableName="order_items">
+            <column name="id" type="INT" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="order_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="product_id" type="INT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="price" type="DECIMAL(10,2)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="quantity" type="INT" defaultValueNumeric="1">
+                <constraints nullable="false"/>
+            </column>
+            <column name="created_at" type="TIMESTAMP" defaultValueComputed="CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+            <column name="updated_at"
+                    type="TIMESTAMP"
+                    defaultValueComputed="CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+        <addUniqueConstraint
+            tableName="order_items"
+            columnNames="order_id, product_id"
+            constraintName="uk_order_product"
+        />
+        <addForeignKeyConstraint
+            baseTableName="order_items"
+            baseColumnNames="order_id"
+            referencedTableName="orders"
+            referencedColumnNames="id"
+            constraintName="fk_order_items_orders"
+        />
+        <addForeignKeyConstraint
+            baseTableName="order_items"
+            baseColumnNames="product_id"
+            referencedTableName="products"
+            referencedColumnNames="id"
+            constraintName="fk_order_items_products"
+        />
+        <rollback>
+            <dropForeignKeyConstraint 
+                baseTableName="order_items"
+                constraintName="fk_order_items_orders"
+            />
+            <dropForeignKeyConstraint 
+                baseTableName="order_items"
+                constraintName="fk_order_items_products"
+            />
+            <dropUniqueConstraint
+                tableName="order_items"
+                constraintName="uk_order_product"
+            />
+            <dropTable tableName="order_items"/>
+        </rollback>
+    </changeSet>
 </databaseChangeLog>

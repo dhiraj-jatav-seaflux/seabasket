@@ -1,6 +1,7 @@
 import { withRoutes } from "@helpers";
 import { adminRoutes } from "@modules/admin/admin.route";
 import { miscRoutes } from "@modules/misc";
+import { orderRoutes } from "@modules/orders";
 import { productRoutes } from "@modules/products";
 import { userRoutes } from "@modules/user";
 import { Router } from "express";
@@ -15,6 +16,7 @@ const routes = (app: Router) => {
   app.use("/users", userRoutes);
   app.use("/admin",adminRoutes)
   app.use("/products",productRoutes)
+  app.use('/orders',orderRoutes)
   // Handle 404
   app.all("/*splat", (_, res) => {
     res.status(404).json({

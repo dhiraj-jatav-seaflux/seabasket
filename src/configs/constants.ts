@@ -37,4 +37,6 @@ export const Constants: Readonly<{ [key: string]: any }> = {
   PASSWORD_MIN_LENGTH: 6,
 
   RESET_PASS_EXPIRY: 900,
+
+  MINIMUM_ORDER_AMOUNT : 50
 };

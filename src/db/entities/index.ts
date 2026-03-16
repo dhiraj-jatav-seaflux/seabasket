@@ -3,3 +3,6 @@ export * from "./categories.entity"
 export * from "./products.entity"
 export * from "./product-images.entity"
 export * from "./reviews.entity"
+export * from "./carts.entity"
+export * from './orders.entity'
+export * from "./order-items.entity"

@@ -6,3 +6,11 @@ export enum UserRole {
   USER = 'USER',
   ADMIN = 'ADMIN'
 }
+
+export enum Status{
+  PENDING = 'PENDING',
+  PAID = 'PAID',
+  CANCELLED = 'CANCELLED',
+  SHIPPED = 'SHIPPED',
+  DELIVERED = 'DELIVERED'
+}

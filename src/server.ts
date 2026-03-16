@@ -39,7 +39,12 @@ export const createServer = async (envs: EnvSchema) => {
   app.use(methodOverride());
 
   // Body Parsing
-  app.use(json({ limit: "50mb" }));
+  app.use((req, res, next) => {
+  if (req.originalUrl === "/orders/stripe/webhook") {
+      return next(); // skip JSON parser for Stripe webhook
+    }
+    json({ limit: "50mb" })(req, res, next);
+  });
   app.use(urlencoded({ extended: true })); // parse application/x-www-form-urlencoded
 
   // Destruct Pager from query string and typecast to numbers

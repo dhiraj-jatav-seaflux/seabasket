@@ -1,6 +1,8 @@
 import { UserRole } from "@types";
-import { Column, CreateDateColumn, Entity, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
+import { Column, CreateDateColumn, Entity, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
 import { ReviewsEntity } from "./reviews.entity";
+import { CartsEntity } from "./carts.entity";
+import { OrderEntity } from "./orders.entity";
 
 @Entity("users")
 export class UserEntity {
@@ -57,4 +59,10 @@ export class UserEntity {
 
   @OneToMany(() => ReviewsEntity, (review) => review.user)
   reviews: ReviewsEntity[];
+
+  @OneToOne(()=>CartsEntity,(cart)=>cart.user)
+  cart:CartsEntity
+
+  @OneToMany(() => OrderEntity, (order) => order.user)
+  orders: OrderEntity[];
 }

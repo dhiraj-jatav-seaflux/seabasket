@@ -1,4 +1,9 @@
-import { ProductsEntity, ReviewsEntity, UserEntity } from "@entities";
+import {
+  CartsEntity,
+  ProductsEntity,
+  ReviewsEntity,
+  UserEntity,
+} from "@entities";
 import {
   encode,
   decode,
@@ -12,6 +17,8 @@ import { TRequest, TResponse } from "@types";
 import { NextFunction } from "express";
 import { TSignInUserDTO, TSignUpUserDTO } from "./dtos";
 import { sendEmail } from "@helpers";
+import { CartItemsEntity } from "db/entities/cart-items.entity";
+import { createECDH } from "crypto";
 
 export async function signUpUser(
   req: TRequest<TSignUpUserDTO>,
@@ -64,7 +71,7 @@ export async function signUpUser(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp)
+    await sendEmail(user.email, otp);
 
     const token = encode({ id: user.id });
 
@@ -116,7 +123,7 @@ export async function signInUser(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp)
+    await sendEmail(user.email, otp);
 
     const token = encode({
       id: user.id,
@@ -137,8 +144,12 @@ export async function verifyLoginOtp(
   next: NextFunction,
 ) {
   try {
-    const { otp } = req.body;
+    const { otp, cartItems } = req.body;
     const token = req.headers.authorization?.split(" ")[1];
+
+    const cartsRepo = getRepo(CartsEntity);
+    const cartItemsRepo = getRepo(CartItemsEntity);
+    const productsRepo = getRepo(ProductsEntity);
 
     if (!token) {
       return next({ status: 401, message: "Token missing" });
@@ -157,7 +168,7 @@ export async function verifyLoginOtp(
     });
 
     if (!user) {
-      return next({ status: 400, message: "User not found" });
+      return next({ status: 404, message: "User not found" });
     }
 
     if (user.login_otp !== otp) {
@@ -166,6 +177,63 @@ export async function verifyLoginOtp(
 
     if (new Date() > user.login_otp_expiration) {
       return next({ status: 400, message: "OTP expired" });
+    }
+
+    const userCart = await cartsRepo.findOne({
+      where: { id: user.id },
+    });
+
+    if (!userCart) {
+      const cart = cartsRepo.create({
+        user_id: user.id,
+      });
+
+      await cartsRepo.save(cart);
+
+      for (const data of cartItems) {
+        const product = await productsRepo.findOne({
+          where: { id: data.id },
+        });
+
+        // Skip if product doesn't exist
+        if (!product) continue;
+
+        const cartItem = cartItemsRepo.create({
+          cart_id: cart.id,
+          product_id: product.id,
+          quantity: data.quantity,
+        });
+
+        await cartItemsRepo.save(cartItem);
+      }
+    } else {
+      for (const data of cartItems) {
+        const product = await productsRepo.findOne({
+          where: { id: data.id },
+        });
+
+        if (!product) continue;
+
+        const existingCartItem = await cartItemsRepo.findOne({
+          where: {
+            cart_id: userCart.id,
+            product_id: product.id,
+          },
+        });
+
+        if (existingCartItem) {
+          existingCartItem.quantity += data.quantity;
+          await cartItemsRepo.save(existingCartItem);
+        } else {
+          const newCartItem = cartItemsRepo.create({
+            cart_id: userCart.id,
+            product_id: product.id,
+            quantity: data.quantity,
+          });
+
+          await cartItemsRepo.save(newCartItem);
+        }
+      }
     }
 
     user.login_otp = null;
@@ -208,7 +276,7 @@ export async function resendOtp(
     });
 
     if (!user) {
-      return next({ status: 400, message: "User not found" });
+      return next({ status: 404, message: "User not found" });
     }
 
     const otp = generateOTP();
@@ -219,7 +287,7 @@ export async function resendOtp(
 
     await userRepository.save(user);
 
-    await sendEmail(user.email, otp)
+    await sendEmail(user.email, otp);
 
     const newToken = encode({
       id: user.id,
@@ -259,7 +327,7 @@ export async function forgotPassword(
 
     await userRepository.save(user);
 
-    await sendResetEmail(user.email, token)
+    await sendResetEmail(user.email, token);
 
     res
       .status(200)
@@ -345,28 +413,35 @@ export async function updateUser(
   res: TResponse,
   next: NextFunction,
 ) {
-  const { userId } = req.params;
-  const {
-    first_name,
-    last_name,
-    email,
-    password,
-    phone,
-    address,
-    city,
-    pincode,
-    state,
-  } = req.dto;
+  const { id } = req.me;
+  const { first_name, last_name, email, phone, address, city, pincode, state } =
+    req.dto;
 
   try {
     const userRepository = getRepo(UserEntity);
 
     const user = await userRepository.findOne({
-      where: { id: Number(userId) },
+      where: { id },
     });
 
     if (!user) {
       return res.status(400).json({ message: "User does not exist" });
+    }
+
+    const existingUserEmail = await userRepository.findOne({
+      where: { email },
+    });
+
+    const existingUserPhone = await userRepository.findOne({
+      where: { phone },
+    });
+
+    if (existingUserEmail && existingUserEmail.id != id) {
+      return res.status(400).json({ message: "Email already exists" });
+    }
+
+    if (existingUserPhone && existingUserPhone.id != id) {
+      return res.status(400).json({ message: "Phone number already exists" });
     }
 
     user.first_name = first_name;
@@ -374,7 +449,6 @@ export async function updateUser(
     user.address = address;
     user.city = city;
     user.email = email;
-    user.password = password;
     user.pincode = pincode;
     user.phone = phone;
     user.state = state;
@@ -412,7 +486,7 @@ export async function addReview(
 
     const alreadyReviewed = await reviewsRepo.findOne({
       where: {
-        id: productId,
+        product_id: productId,
         user_id: id,
       },
     });
