@@ -228,3 +228,28 @@ export async function getOrder(req:TRequest,res:TResponse,next:NextFunction){
         next(error)
     }
 }
+
+export async function cancelOrder(req:TRequest,res:TResponse,next:NextFunction){
+  try {
+    const {id} = req.me;
+    const orderId = Number(req.params.orderId);
+
+    const orderRepo = getRepo(OrderEntity);
+
+    const order = await orderRepo.findOne({
+      where:{id:orderId,user_id:id}
+    })
+
+    if(!order){
+      return res.status(404).json({message:'Order does not exist'})
+    }
+
+    order.status = Status.CANCELLED;
+
+    await orderRepo.save(order);
+
+    return res.status(200).json({message:'Order cancelled',cancelledOrder:order})
+  } catch (error) {
+    next(error)
+  }
+}
