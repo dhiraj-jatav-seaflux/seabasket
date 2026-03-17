@@ -85,11 +85,8 @@ export async function checkout(
 
       metadata: {
         orderId: order.id.toString(),
+        cartId:cart.id.toString()
       },
-    });
-
-    await cartItemsRepo.delete({
-      cart_id: cart.id,
     });
 
     return res.status(200).json({
@@ -123,6 +120,7 @@ export async function stripeWebHook(
 
   try {
     const ordersRepo = getRepo(OrderEntity);
+    const cartItemsRepo = getRepo(CartItemsEntity);
 
     switch (event.type) {
 
@@ -130,6 +128,7 @@ export async function stripeWebHook(
         const session = event.data.object as Stripe.Checkout.Session;
 
         const orderId = session.metadata?.orderId;
+        const cartId = session.metadata?.cartId
 
         if (!orderId) {
           return res.status(400).json({ message: "OrderId missing in metadata" });
@@ -146,6 +145,10 @@ export async function stripeWebHook(
         order.status = Status.PAID;
 
         await ordersRepo.save(order);
+
+        await cartItemsRepo.delete({
+          cart_id: Number(cartId),
+        });
 
         console.log(`Order ${order.id} marked as PAID`);
 
