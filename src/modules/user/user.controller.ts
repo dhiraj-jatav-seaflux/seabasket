@@ -18,7 +18,6 @@ import { NextFunction } from "express";
 import { TSignInUserDTO, TSignUpUserDTO } from "./dtos";
 import { sendEmail } from "@helpers";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
-import { createECDH } from "crypto";
 
 export async function signUpUser(
   req: TRequest<TSignUpUserDTO>,
@@ -179,59 +178,60 @@ export async function verifyLoginOtp(
       return next({ status: 400, message: "OTP expired" });
     }
 
-    const userCart = await cartsRepo.findOne({
-      where: { id: user.id },
-    });
-
-    if (!userCart) {
-      const cart = cartsRepo.create({
-        user_id: user.id,
+    if(cartItems && cartItems.length>0){
+      const userCart = await cartsRepo.findOne({
+        where: { id: user.id },
       });
-
-      await cartsRepo.save(cart);
-
-      for (const data of cartItems) {
-        const product = await productsRepo.findOne({
-          where: { id: data.id },
+  
+      if (!userCart) {
+        const cart = cartsRepo.create({
+          user_id: user.id,
         });
-
-        // Skip if product doesn't exist
-        if (!product) continue;
-
-        const cartItem = cartItemsRepo.create({
-          cart_id: cart.id,
-          product_id: product.id,
-          quantity: data.quantity,
-        });
-
-        await cartItemsRepo.save(cartItem);
-      }
-    } else {
-      for (const data of cartItems) {
-        const product = await productsRepo.findOne({
-          where: { id: data.id },
-        });
-
-        if (!product) continue;
-
-        const existingCartItem = await cartItemsRepo.findOne({
-          where: {
-            cart_id: userCart.id,
-            product_id: product.id,
-          },
-        });
-
-        if (existingCartItem) {
-          existingCartItem.quantity += data.quantity;
-          await cartItemsRepo.save(existingCartItem);
-        } else {
-          const newCartItem = cartItemsRepo.create({
-            cart_id: userCart.id,
+  
+        await cartsRepo.save(cart);
+  
+        for (const data of cartItems) {
+          const product = await productsRepo.findOne({
+            where: { id: data.id },
+          });
+  
+          if (!product) continue;
+  
+          const cartItem = cartItemsRepo.create({
+            cart_id: cart.id,
             product_id: product.id,
             quantity: data.quantity,
           });
-
-          await cartItemsRepo.save(newCartItem);
+  
+          await cartItemsRepo.save(cartItem);
+        }
+      } else {
+        for (const data of cartItems) {
+          const product = await productsRepo.findOne({
+            where: { id: data.id },
+          });
+  
+          if (!product) continue;
+  
+          const existingCartItem = await cartItemsRepo.findOne({
+            where: {
+              cart_id: userCart.id,
+              product_id: product.id,
+            },
+          });
+  
+          if (existingCartItem) {
+            existingCartItem.quantity += data.quantity;
+            await cartItemsRepo.save(existingCartItem);
+          } else {
+            const newCartItem = cartItemsRepo.create({
+              cart_id: userCart.id,
+              product_id: product.id,
+              quantity: data.quantity,
+            });
+  
+            await cartItemsRepo.save(newCartItem);
+          }
         }
       }
     }
