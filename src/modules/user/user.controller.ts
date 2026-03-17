@@ -15,7 +15,7 @@ import {
 } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { NextFunction } from "express";
-import { TSignInUserDTO, TSignUpUserDTO } from "./dtos";
+import { RatingDTO, TSignInUserDTO, TSignUpUserDTO } from "./dtos";
 import { sendEmail } from "@helpers";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 
@@ -471,8 +471,7 @@ export async function addReview(
     const productId = Number(req.params.productId);
     const { id } = req.me;
 
-    const { comment } = req.body;
-    const { rating } = req.body;
+    const { comment, rating } = RatingDTO.parse(req.body);
 
     const productRepo = getRepo(ProductsEntity);
     const product = await productRepo.findOne({
