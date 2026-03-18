@@ -344,8 +344,6 @@ export async function resetPassword(
   res: TResponse,
   next: NextFunction,
 ) {
-  
-  
   try {
     const { password,token } = req.body;
     const userRepository = getRepo(UserEntity);
@@ -354,11 +352,11 @@ export async function resetPassword(
     });
 
     if (!user) {
-      return res.status(400).json({ message: "Invalid reset token" });
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
     if (user.reset_token_expiration < new Date()) {
-      return res.status(400).json({ message: "Reset token expired" });
+      return res.status(400).json({ message: "Invalid or expired token" });
     }
 
     user.password = await hashPassword(password);
