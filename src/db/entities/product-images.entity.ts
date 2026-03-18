@@ -1,5 +1,5 @@
 import { Column, CreateDateColumn, Entity, JoinColumn, ManyToOne, OneToMany, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm"
-import { ProductsEntity } from "./products.entity";
+import { ProductsEntity } from "@entities";
 
 @Entity("product_images")
 export class ProductImagesEntity{

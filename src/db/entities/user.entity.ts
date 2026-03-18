@@ -1,8 +1,8 @@
 import { UserRole } from "@types";
 import { Column, CreateDateColumn, Entity, OneToMany, OneToOne, PrimaryGeneratedColumn, UpdateDateColumn } from "typeorm";
-import { ReviewsEntity } from "./reviews.entity";
-import { CartsEntity } from "./carts.entity";
-import { OrderEntity } from "./orders.entity";
+import { ReviewsEntity } from "@entities";
+import { CartsEntity } from "@entities";
+import { OrderEntity } from "@entities";
 
 @Entity("users")
 export class UserEntity {

@@ -1,7 +1,6 @@
 import { UserEntity } from "@entities";
 import { Request, Response } from "express";
 
-
 export interface Me {
   id: number;
 }

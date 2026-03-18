@@ -1,7 +1,7 @@
 import { withRoutes } from "@helpers";
 import { acl } from "@middlewares";
 import { Router } from "express";
-import { cancelOrder, checkout, getOrder, getOrders, stripeWebHook } from "./orders.controller";
+import { buyNow, cancelOrder, checkout, getOrder, getOrders, stripeWebHook } from "./orders.controller";
 import express from "express" 
 
 const routes = (app: Router) => {
@@ -12,6 +12,7 @@ const routes = (app: Router) => {
     express.raw({ type: "application/json" }),
     stripeWebHook
   );
+  app.post('/buy-now/:productId',acl,buyNow)
   app.put('/cancel-order/:orderId',acl,cancelOrder)
   app.get('/my-order/:orderId',acl,getOrder)
 };

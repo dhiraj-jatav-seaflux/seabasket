@@ -8,11 +8,11 @@ import {
   JoinColumn,
   OneToMany,
 } from "typeorm";
-import { CategoriesEntity } from "./categories.entity";
-import { ProductImagesEntity } from "./product-images.entity";
-import { ReviewsEntity } from "./reviews.entity";
-import { CartItemsEntity } from "./cart-items.entity";
-import { OrderItemsEntity } from "./order-items.entity";
+import { CategoriesEntity } from "@entities";
+import { ProductImagesEntity } from "@entities";
+import { ReviewsEntity } from "@entities";
+import { CartItemsEntity } from "@entities";
+import { OrderItemsEntity } from "@entities";
 
 @Entity("products")
 export class ProductsEntity {

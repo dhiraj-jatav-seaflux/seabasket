@@ -6,3 +6,4 @@ export * from "./reviews.entity"
 export * from "./carts.entity"
 export * from './orders.entity'
 export * from "./order-items.entity"
+export * from './cart-items.entity'

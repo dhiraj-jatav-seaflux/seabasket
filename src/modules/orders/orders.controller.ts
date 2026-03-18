@@ -1,5 +1,10 @@
 import { Constants, stripe } from "@configs";
-import { CartsEntity, OrderEntity, OrderItemsEntity } from "@entities";
+import {
+  CartsEntity,
+  OrderEntity,
+  OrderItemsEntity,
+  ProductsEntity,
+} from "@entities";
 import { getRepo } from "@helpers";
 import { Status, TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
@@ -9,7 +14,7 @@ import Stripe from "stripe";
 export async function checkout(
   req: TRequest,
   res: TResponse,
-  next: NextFunction
+  next: NextFunction,
 ) {
   try {
     const { id } = req.me;
@@ -42,8 +47,12 @@ export async function checkout(
       return sum + item.product.price * item.quantity;
     }, 0);
 
-    if(totalAmount< Constants.MINIMUM_ORDER_AMOUNT){
-      return res.status(400).json({message: `Minimum order amount must be ₹${Constants.MINIMUM_ORDER_AMOUNT} to proceed with payment.`})
+    if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
+      return res
+        .status(400)
+        .json({
+          message: `Minimum order amount must be ₹${Constants.MINIMUM_ORDER_AMOUNT} to proceed with payment.`,
+        });
     }
 
     const order = ordersRepo.create({
@@ -59,7 +68,7 @@ export async function checkout(
         product_id: item.product_id,
         price: item.product.price,
         quantity: item.quantity,
-      })
+      }),
     );
 
     await orderItemsRepo.save(orderItems);
@@ -85,14 +94,90 @@ export async function checkout(
 
       metadata: {
         orderId: order.id.toString(),
-        cartId:cart.id.toString()
+        cartId: cart.id.toString(),
       },
     });
 
     return res.status(200).json({
       url: session.url,
     });
+  } catch (error) {
+    next(error);
+  }
+}
 
+export async function buyNow(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.me;
+
+    const productId = Number(req.params.productId);
+
+    const productRepo = getRepo(ProductsEntity);
+    const orderRepo = getRepo(OrderEntity);
+    const orderItemsRepo = getRepo(OrderItemsEntity);
+
+    const product = await productRepo.findOne({
+      where: { id: productId },
+    });
+
+    if (!product) {
+      return res.status(404).json({ message: "Product not found" });
+    }
+
+    const totalAmount = Number(product.price);
+
+    if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
+      return res
+        .status(400)
+        .json({ message: "Product amount should be 50 for single product" });
+    }
+
+    const order = orderRepo.create({
+      user_id: id,
+      total_amount: totalAmount,
+    });
+
+    await orderRepo.save(order);
+
+    const orderItem = orderItemsRepo.create({
+      order_id: order.id,
+      product_id: productId,
+      price:totalAmount
+    });
+
+    await orderItemsRepo.save(orderItem);
+
+    const lineItems = {
+      price_data: {
+        currency: "inr",
+        product_data: {
+          name: product.name,
+        },
+        unit_amount: Math.round(totalAmount * 100),
+      },
+      quantity:1,
+    };
+
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types: ["card"],
+      line_items: [lineItems],
+      mode: "payment",
+
+      success_url: `${process.env.FRONTEND_URL}/success?orderId=${order.id}`,
+      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
+
+      metadata: {
+        orderId: order.id.toString(),
+      },
+    });
+
+    return res.status(200).json({
+      url: session.url,
+    });
   } catch (error) {
     next(error);
   }
@@ -101,7 +186,7 @@ export async function checkout(
 export async function stripeWebHook(
   req: TRequest,
   res: TResponse,
-  next: NextFunction
+  next: NextFunction,
 ) {
   const sig = req.headers["stripe-signature"] as string;
 
@@ -111,7 +196,7 @@ export async function stripeWebHook(
     event = stripe.webhooks.constructEvent(
       req.body as Buffer,
       sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
+      process.env.STRIPE_WEBHOOK_SECRET!,
     );
   } catch (error: any) {
     console.error("Webhook signature verification failed:", error.message);
@@ -123,19 +208,20 @@ export async function stripeWebHook(
     const cartItemsRepo = getRepo(CartItemsEntity);
 
     switch (event.type) {
-
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
 
         const orderId = session.metadata?.orderId;
-        const cartId = session.metadata?.cartId
+        const cartId = session.metadata?.cartId;
 
         if (!orderId) {
-          return res.status(400).json({ message: "OrderId missing in metadata" });
+          return res
+            .status(400)
+            .json({ message: "OrderId missing in metadata" });
         }
 
         const order = await ordersRepo.findOne({
-          where: { id: Number(orderId) }
+          where: { id: Number(orderId) },
         });
 
         if (!order) {
@@ -146,9 +232,11 @@ export async function stripeWebHook(
 
         await ordersRepo.save(order);
 
-        await cartItemsRepo.delete({
-          cart_id: Number(cartId),
-        });
+        if(cartId){
+          await cartItemsRepo.delete({
+            cart_id: Number(cartId),
+          });
+        }
 
         console.log(`Order ${order.id} marked as PAID`);
 
@@ -163,7 +251,7 @@ export async function stripeWebHook(
         if (!orderId) break;
 
         const order = await ordersRepo.findOne({
-          where: { id: Number(orderId) }
+          where: { id: Number(orderId) },
         });
 
         if (!order) break;
@@ -182,77 +270,94 @@ export async function stripeWebHook(
     }
 
     res.status(200).json({ received: true });
-
   } catch (error) {
     next(error);
   }
 }
 
-export async function getOrders(req:TRequest,res:TResponse,next:NextFunction){
-    try {
-        const {id} = req.me;
-        const orderRepo = getRepo(OrderEntity);
-
-        const orders = await orderRepo.find({
-            where:{user_id:id},
-            relations:{
-               items:true 
-            }
-        })
-
-        if(orders.length === 0){
-            return res.status(200).json({message:'No orders yet'})
-        }
-
-        return res.status(200).json({message:'Orders fetched successfully', orders:orders})
-    } catch (error) {
-        next(error)
-    }
-}
-
-export async function getOrder(req:TRequest,res:TResponse,next:NextFunction){
-    try {
-        const{id} = req.me
-        const orderId = Number(req.params.orderId);
-
-        const ordersRepo = getRepo(OrderEntity);
-
-        const order = await ordersRepo.findOne({
-            where:{id:orderId,user_id:id},
-            relations:{
-                items:true
-            }
-        });
-        if(!order){
-            return res.status(404).json({message:"Order does not exist"})
-        }
-        return res.status(200).json({message:'Order fetched successfully',order:order})
-    } catch (error) {
-        next(error)
-    }
-}
-
-export async function cancelOrder(req:TRequest,res:TResponse,next:NextFunction){
+export async function getOrders(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
   try {
-    const {id} = req.me;
+    const { id } = req.me;
+    const orderRepo = getRepo(OrderEntity);
+
+    const orders = await orderRepo.find({
+      where: { user_id: id },
+      relations: {
+        items: true,
+      },
+    });
+
+    if (orders.length === 0) {
+      return res.status(200).json({ message: "No orders yet" });
+    }
+
+    return res
+      .status(200)
+      .json({ message: "Orders fetched successfully", orders: orders });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function getOrder(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.me;
+    const orderId = Number(req.params.orderId);
+
+    const ordersRepo = getRepo(OrderEntity);
+
+    const order = await ordersRepo.findOne({
+      where: { id: orderId, user_id: id },
+      relations: {
+        items: true,
+      },
+    });
+    if (!order) {
+      return res.status(404).json({ message: "Order does not exist" });
+    }
+    return res
+      .status(200)
+      .json({ message: "Order fetched successfully", order: order });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function cancelOrder(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction,
+) {
+  try {
+    const { id } = req.me;
     const orderId = Number(req.params.orderId);
 
     const orderRepo = getRepo(OrderEntity);
 
     const order = await orderRepo.findOne({
-      where:{id:orderId,user_id:id}
-    })
+      where: { id: orderId, user_id: id },
+    });
 
-    if(!order){
-      return res.status(404).json({message:'Order does not exist'})
+    if (!order) {
+      return res.status(404).json({ message: "Order does not exist" });
     }
 
     order.status = Status.CANCELLED;
 
     await orderRepo.save(order);
 
-    return res.status(200).json({message:'Order cancelled',cancelledOrder:order})
+    return res
+      .status(200)
+      .json({ message: "Order cancelled", cancelledOrder: order });
   } catch (error) {
-    next(error)
+    next(error);
   }
 }

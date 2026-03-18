@@ -10,8 +10,8 @@ import {
 } from "typeorm";
 
 import { Status } from "@types";
-import { OrderItemsEntity } from "./order-items.entity";
-import { UserEntity } from "./user.entity";
+import { OrderItemsEntity } from "@entities";
+import { UserEntity } from "@entities";
 
 @Entity("orders")
 export class OrderEntity {
