@@ -178,31 +178,31 @@ export async function verifyLoginOtp(
       return next({ status: 400, message: "OTP expired" });
     }
 
-    if(cartItems && cartItems.length>0){
+    if (cartItems && cartItems.length > 0) {
       const userCart = await cartsRepo.findOne({
         where: { id: user.id },
       });
-  
+
       if (!userCart) {
         const cart = cartsRepo.create({
           user_id: user.id,
         });
-  
+
         await cartsRepo.save(cart);
-  
+
         for (const data of cartItems) {
           const product = await productsRepo.findOne({
             where: { id: data.id },
           });
-  
+
           if (!product) continue;
-  
+
           const cartItem = cartItemsRepo.create({
             cart_id: cart.id,
             product_id: product.id,
             quantity: data.quantity,
           });
-  
+
           await cartItemsRepo.save(cartItem);
         }
       } else {
@@ -210,16 +210,16 @@ export async function verifyLoginOtp(
           const product = await productsRepo.findOne({
             where: { id: data.id },
           });
-  
+
           if (!product) continue;
-  
+
           const existingCartItem = await cartItemsRepo.findOne({
             where: {
               cart_id: userCart.id,
               product_id: product.id,
             },
           });
-  
+
           if (existingCartItem) {
             existingCartItem.quantity += data.quantity;
             await cartItemsRepo.save(existingCartItem);
@@ -229,7 +229,7 @@ export async function verifyLoginOtp(
               product_id: product.id,
               quantity: data.quantity,
             });
-  
+
             await cartItemsRepo.save(newCartItem);
           }
         }
@@ -307,7 +307,6 @@ export async function forgotPassword(
   res: TResponse,
   next: NextFunction,
 ) {
-  
   try {
     const { email } = req.body;
 
@@ -345,7 +344,7 @@ export async function resetPassword(
   next: NextFunction,
 ) {
   try {
-    const { password,token } = req.body;
+    const { password, token } = req.body;
     const userRepository = getRepo(UserEntity);
     const user = await userRepository.findOne({
       where: { reset_token: token },
@@ -472,11 +471,11 @@ export async function addReview(
     const { comment, rating } = RatingDTO.parse(req.body);
 
     const productRepo = getRepo(ProductsEntity);
+    const reviewsRepo = getRepo(ReviewsEntity);
+
     const product = await productRepo.findOne({
       where: { id: productId },
     });
-
-    const reviewsRepo = getRepo(ReviewsEntity);
 
     if (!product) {
       return res.status(404).json({ message: "Product does not exist" });
@@ -503,6 +502,16 @@ export async function addReview(
     });
 
     await reviewsRepo.save(review);
+
+    const result = await reviewsRepo
+      .createQueryBuilder("review")
+      .select("AVG(review.rating)", "avg")
+      .where("review.product_id = :productId", { productId })
+      .getRawOne();
+
+    product.rating = Number(result.avg) || 0;
+
+    await productRepo.save(product);
 
     res.status(200).json({ message: "Review added", review: review });
   } catch (error) {

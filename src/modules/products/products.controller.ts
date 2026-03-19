@@ -1,8 +1,4 @@
-import {
-  CartsEntity,
-  CategoriesEntity,
-  ProductsEntity,
-} from "@entities";
+import { CartsEntity, CategoriesEntity, ProductsEntity } from "@entities";
 import { getRepo } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
@@ -102,7 +98,36 @@ export async function getProduct(
       relations: {
         category: true,
         images: true,
-        reviews: true,
+        reviews: {
+          user: true,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        description: true,
+        rating: true,
+        discount: true,
+        stock: true,
+        is_trending: true,
+        category: {
+          id: true,
+          category_name: true,
+        },
+        images: {
+          id: true,
+          image_url: true,
+        },
+        reviews: {
+          id: true,
+          comment: true,
+          rating: true,
+          user: {
+            id: true,
+            first_name: true,
+          },
+        },
       },
     });
     if (!product) {
@@ -320,7 +345,6 @@ export async function updateCartItemQuantity(
   try {
     const { id } = req.me;
     const productId = Number(req.params.productId);
-    const productRepo = getRepo(ProductsEntity);
     const cartsRepo = getRepo(CartsEntity);
     const cartItemsRepo = getRepo(CartItemsEntity);
 
