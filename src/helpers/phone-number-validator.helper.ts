@@ -1,10 +1,14 @@
-import PhoneNumber from "libphonenumber-js";
+import parsePhoneNumber from "libphonenumber-js";
 
 export const validatePhoneNumber = (phoneNumber: string): boolean => {
-  const parsedNumber = PhoneNumber(phoneNumber);
-
-  if (parsedNumber && parsedNumber.country) {
-    return true;
+  if (!/^[6-9]\d{9}$/.test(phoneNumber)) {
+    return false;
   }
-  return false;
+
+  try {
+    const parsedNumber = parsePhoneNumber(phoneNumber, "IN");
+    return parsedNumber?.isValid() ?? false;
+  } catch {
+    return false;
+  }
 };

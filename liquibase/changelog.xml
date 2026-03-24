@@ -301,12 +301,30 @@
             <column name="user_id" type="INT">
                 <constraints nullable="false"/>
             </column>
+            <column name="stripe_session_id" type="VARCHAR(255)">
+                <constraints nullable="true" unique="true"/>
+            </column>
             <column name="total_amount" type="DECIMAL(10,2)">
                 <constraints nullable="false"/>
             </column>
             <column name="status"
                     type="ENUM('PENDING','PAID','CANCELLED','SHIPPED','DELIVERED')"
                     defaultValue="PENDING">
+                <constraints nullable="false"/>
+            </column>
+            <column name="payment_mode" type="ENUM('COD','ONLINE')" defaultValue="COD">
+                <constraints nullable="false"/>
+            </column>
+            <column name="delivery_address" type="TEXT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="city" type="VARCHAR(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="pincode" type="VARCHAR(6)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="state" type="VARCHAR(100)">
                 <constraints nullable="false"/>
             </column>
             <column name="created_at"

@@ -5,11 +5,13 @@ import {
   OrderItemsEntity,
   ProductsEntity,
 } from "@entities";
-import { getRepo } from "@helpers";
-import { Status, TRequest, TResponse } from "@types";
+import { finalPrice, getRepo } from "@helpers";
+import { PaymentMode, Status, TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 import { NextFunction } from "express";
 import Stripe from "stripe";
+import { OrderDTO } from "./dtos";
+import { getDB } from "@db";
 
 export async function checkout(
   req: TRequest,
@@ -19,165 +21,163 @@ export async function checkout(
   try {
     const { id } = req.me;
 
+    const parsed = OrderDTO.parse(req.body);
+
+    const { isSingle, productId, address, city, state, pincode, paymentMode } = parsed;
+
+    const productRepo = getRepo(ProductsEntity);
+    const orderItemsRepo = getRepo(OrderItemsEntity);
     const cartsRepo = getRepo(CartsEntity);
     const cartItemsRepo = getRepo(CartItemsEntity);
     const ordersRepo = getRepo(OrderEntity);
-    const orderItemsRepo = getRepo(OrderItemsEntity);
 
-    const cart = await cartsRepo.findOne({
-      where: { user_id: id },
-    });
+    if (isSingle) {
+      if (!productId) {
+        return res.status(400).json({ message: "productId is required" });
+      }
+      const product = await productRepo.findOne({
+        where: { id: productId },
+      });
 
-    if (!cart) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
+      if (!product) {
+        return res.status(404).json({ message: "Product not found" });
+      }
 
-    const cartItems = await cartItemsRepo.find({
-      where: { cart_id: cart.id },
-      relations: {
-        product: true,
-      },
-    });
+      const totalAmount = Number(product.price);
 
-    if (!cartItems.length) {
-      return res.status(400).json({ message: "Cart is empty" });
-    }
+      if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
+        return res
+          .status(400)
+          .json({ message: "Product amount should be 50 for single product" });
+      }
 
-    const totalAmount = cartItems.reduce((sum, item) => {
-      return sum + item.product.price * item.quantity;
-    }, 0);
+      if (paymentMode === PaymentMode.COD) {
+        const order = ordersRepo.create({
+          user_id: id,
+          total_amount: totalAmount,
+          delivery_address: address,
+          city,
+          state,
+          pincode,
+          payment_mode: paymentMode,
+        });
 
-    if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
-      return res
-        .status(400)
-        .json({
+        await ordersRepo.save(order);
+
+        const orderItem = orderItemsRepo.create({
+          order_id: order.id,
+          product_id: productId,
+          price: totalAmount,
+        });
+
+        await orderItemsRepo.save(orderItem);
+
+        return res.status(200).json({ message: "Order placed", order: order });
+      }
+
+      const final_price = Math.round(finalPrice(product.price, product.discount) * 100) / 100;
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(final_price * 100),
+        currency: "inr",
+        metadata: {
+          userId: id.toString(),
+          productId: productId?.toString() || "",
+          isSingle: isSingle ? "true" : "false",
+          address,
+          city,
+          state,
+          pincode,
+        },
+      });
+
+      return res.status(200).json({
+        client_secret: paymentIntent.client_secret,
+      });
+    } else {
+      const cart = await cartsRepo.findOne({
+        where: { user_id: id },
+      });
+
+      if (!cart) {
+        return res.status(400).json({ message: "Cart is empty" });
+      }
+
+      const cartItems = await cartItemsRepo.find({
+        where: { cart_id: cart.id },
+        relations: {
+          product: true,
+        },
+      });
+
+      if (!cartItems.length) {
+        return res.status(400).json({ message: "Cart is empty" });
+      }
+
+      const totalAmount = cartItems.reduce((sum, item) => {
+        const final_price = Math.round(finalPrice(item.product.price, item.product.discount) * 100) / 100;
+
+        return sum + final_price * item.quantity;
+      }, 0);
+
+      if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
+        return res.status(400).json({
           message: `Minimum order amount must be ₹${Constants.MINIMUM_ORDER_AMOUNT} to proceed with payment.`,
         });
-    }
+      }
 
-    const order = ordersRepo.create({
-      user_id: id,
-      total_amount: totalAmount,
-    });
+      if (paymentMode === PaymentMode.COD) {
+        const order = ordersRepo.create({
+          user_id: id,
+          total_amount: totalAmount,
+          delivery_address: address,
+          city,
+          pincode,
+          state,
+          payment_mode: paymentMode,
+        });
 
-    await ordersRepo.save(order);
+        await ordersRepo.save(order);
 
-    const orderItems = cartItems.map((item) =>
-      orderItemsRepo.create({
-        order_id: order.id,
-        product_id: item.product_id,
-        price: item.product.price,
-        quantity: item.quantity,
-      }),
-    );
+        const orderItems = cartItems.map((item) => {
+          const final_price =
+            Math.round(
+              finalPrice(item.product.price, item.product.discount) * 100,
+            ) / 100;
+          return orderItemsRepo.create({
+            order_id: order.id,
+            product_id: item.product_id,
+            price: final_price,
+            quantity: item.quantity,
+          });
+        });
 
-    await orderItemsRepo.save(orderItems);
+        await orderItemsRepo.save(orderItems);
+        await cartItemsRepo.delete({
+          cart_id: cart.id,
+        });
+        return res.status(200).json({ message: "Order placed", order: order });
+      }
 
-    const lineItems = cartItems.map((item) => ({
-      price_data: {
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(totalAmount * 100),
         currency: "inr",
-        product_data: {
-          name: item.product.name,
+        metadata: {
+          userId: id.toString(),
+          productId: productId?.toString() || "",
+          cartId: cart?.id?.toString() || "",
+          isSingle: isSingle ? "true" : "false",
+          address,
+          city,
+          state,
+          pincode,
         },
-        unit_amount: Math.round(item.product.price * 100),
-      },
-      quantity: item.quantity,
-    }));
+      });
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: lineItems,
-      mode: "payment",
-
-      success_url: `${process.env.FRONTEND_URL}/success?orderId=${order.id}`,
-      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
-
-      metadata: {
-        orderId: order.id.toString(),
-        cartId: cart.id.toString(),
-      },
-    });
-
-    return res.status(200).json({
-      url: session.url,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function buyNow(
-  req: TRequest,
-  res: TResponse,
-  next: NextFunction,
-) {
-  try {
-    const { id } = req.me;
-
-    const productId = Number(req.params.productId);
-
-    const productRepo = getRepo(ProductsEntity);
-    const orderRepo = getRepo(OrderEntity);
-    const orderItemsRepo = getRepo(OrderItemsEntity);
-
-    const product = await productRepo.findOne({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(200).json({
+        client_secret: paymentIntent.client_secret,
+      });
     }
-
-    const totalAmount = Number(product.price);
-
-    if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
-      return res
-        .status(400)
-        .json({ message: "Product amount should be 50 for single product" });
-    }
-
-    const order = orderRepo.create({
-      user_id: id,
-      total_amount: totalAmount,
-    });
-
-    await orderRepo.save(order);
-
-    const orderItem = orderItemsRepo.create({
-      order_id: order.id,
-      product_id: productId,
-      price:totalAmount
-    });
-
-    await orderItemsRepo.save(orderItem);
-
-    const lineItems = {
-      price_data: {
-        currency: "inr",
-        product_data: {
-          name: product.name,
-        },
-        unit_amount: Math.round(totalAmount * 100),
-      },
-      quantity:1,
-    };
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [lineItems],
-      mode: "payment",
-
-      success_url: `${process.env.FRONTEND_URL}/success?orderId=${order.id}`,
-      cancel_url: `${process.env.FRONTEND_URL}/cancel`,
-
-      metadata: {
-        orderId: order.id.toString(),
-      },
-    });
-
-    return res.status(200).json({
-      url: session.url,
-    });
   } catch (error) {
     next(error);
   }
@@ -204,71 +204,137 @@ export async function stripeWebHook(
   }
 
   try {
-    const ordersRepo = getRepo(OrderEntity);
-    const cartItemsRepo = getRepo(CartItemsEntity);
-
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
+      case "payment_intent.succeeded": {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
 
-        const orderId = session.metadata?.orderId;
-        const cartId = session.metadata?.cartId;
+        const {
+          userId,
+          productId,
+          cartId,
+          isSingle,
+          address,
+          city,
+          state,
+          pincode,
+        } = paymentIntent.metadata;
 
-        if (!orderId) {
-          return res
-            .status(400)
-            .json({ message: "OrderId missing in metadata" });
+        const stripePaymentId = paymentIntent.id;
+
+        if (!address || !city || !pincode || !state) {
+          throw new Error("Invalid metadata");
         }
 
-        const order = await ordersRepo.findOne({
-          where: { id: Number(orderId) },
+        if (!userId) break;
+        const db = getDB();
+        const orderRepo = db.getRepository(OrderEntity);
+
+        const existingOrder = await orderRepo.findOne({
+          where: { stripe_session_id: stripePaymentId },
         });
 
-        if (!order) {
-          return res.status(404).json({ message: "Order not found" });
+        if (existingOrder) {
+          console.log("Order already processed");
+          return res.status(200).json({ received: true });
         }
 
-        order.status = Status.PAID;
+        await db.transaction(async (manager) => {
+          const orderRepo = manager.getRepository(OrderEntity);
+          const orderItemsRepo = manager.getRepository(OrderItemsEntity);
+          const cartItemsRepo = manager.getRepository(CartItemsEntity);
+          const productRepo = manager.getRepository(ProductsEntity);
 
-        await ordersRepo.save(order);
+          let totalAmount = 0;
+          let orderItems: OrderItemsEntity[] = [];
 
-        if(cartId){
-          await cartItemsRepo.delete({
-            cart_id: Number(cartId),
+          if (isSingle === "true") {
+            if (!productId) {
+              throw new Error("Invalid productId");
+            }
+            const product = await productRepo.findOne({
+              where: { id: Number(productId) },
+            });
+
+            if (!product) throw new Error("Product not found");
+
+            const final_price =
+              Math.round(finalPrice(product.price, product.discount) * 100) /
+              100;
+
+            totalAmount = final_price;
+
+            orderItems.push(
+              orderItemsRepo.create({
+                product_id: product.id,
+                price: final_price,
+                quantity: 1,
+              }),
+            );
+          } else {
+            if (isSingle === "false" && !cartId) {
+              throw new Error("Invalid cartId");
+            }
+            const cartItems = await cartItemsRepo.find({
+              where: { cart_id: Number(cartId) },
+              relations: { product: true },
+            });
+
+            if (!cartItems.length) throw new Error("Cart empty");
+
+            totalAmount = cartItems.reduce((sum, item) => {
+              const final_price =
+                Math.round(
+                  finalPrice(item.product.price, item.product.discount) * 100,
+                ) / 100;
+
+              return sum + final_price * item.quantity;
+            }, 0);
+
+            orderItems = cartItems.map((item) => {
+              const final_price =
+                Math.round(
+                  finalPrice(item.product.price, item.product.discount) * 100,
+                ) / 100;
+
+              return orderItemsRepo.create({
+                product_id: item.product_id,
+                price: final_price,
+                quantity: item.quantity,
+              });
+            });
+
+            await cartItemsRepo.delete({ cart_id: Number(cartId) });
+          }
+
+          const order = orderRepo.create({
+            user_id: Number(userId),
+            total_amount: totalAmount,
+            delivery_address: address,
+            city,
+            state,
+            pincode,
+            payment_mode: PaymentMode.ONLINE,
+            status: Status.PAID,
+            stripe_session_id: paymentIntent.id,
           });
-        }
 
-        console.log(`Order ${order.id} marked as PAID`);
+          await orderRepo.save(order);
 
-        break;
-      }
+          const itemsWithOrder = orderItems.map((item) => {
+            item.order_id = order.id;
+            return item;
+          });
 
-      case "checkout.session.expired": {
-        const session = event.data.object as Stripe.Checkout.Session;
-
-        const orderId = session.metadata?.orderId;
-
-        if (!orderId) break;
-
-        const order = await ordersRepo.findOne({
-          where: { id: Number(orderId) },
+          await orderItemsRepo.save(itemsWithOrder);
         });
 
-        if (!order) break;
-
-        order.status = Status.CANCELLED;
-
-        await ordersRepo.save(order);
-
-        console.log(`Order ${order.id} cancelled`);
+        console.log("Order created after payment success");
 
         break;
       }
-
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
-
     res.status(200).json({ received: true });
   } catch (error) {
     next(error);
@@ -287,7 +353,12 @@ export async function getOrders(
     const orders = await orderRepo.find({
       where: { user_id: id },
       relations: {
-        items: true,
+        items: {
+          product: true,
+        },
+      },
+      order: {
+        id: "DESC"
       },
     });
 

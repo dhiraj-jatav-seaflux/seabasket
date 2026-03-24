@@ -12,6 +12,7 @@ import {
   hashPassword,
   sendResetEmail,
   verifyPassword,
+  validatePhoneNumber,
 } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { NextFunction } from "express";
@@ -37,6 +38,10 @@ export async function signUpUser(
       state,
     } = req.dto;
     const userRepository = getRepo(UserEntity);
+
+    if(!validatePhoneNumber(phone)){
+      return res.status(400).json({message:'Invalid phone number'})
+    }
 
     const existingUser = await userRepository.findOne({
       where: [{ email }, { phone }],
@@ -440,6 +445,10 @@ export async function updateUser(
 
     if (existingUserPhone && existingUserPhone.id != id) {
       return res.status(400).json({ message: "Phone number already exists" });
+    }
+
+    if(!validatePhoneNumber(phone)){
+      return res.status(400).json({message:'Invalid phone number'})
     }
 
     user.first_name = first_name;

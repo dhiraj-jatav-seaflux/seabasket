@@ -14,3 +14,8 @@ export enum Status{
   SHIPPED = 'SHIPPED',
   DELIVERED = 'DELIVERED'
 }
+
+export enum PaymentMode {
+  COD = 'COD',
+  ONLINE = 'ONLINE'
+}

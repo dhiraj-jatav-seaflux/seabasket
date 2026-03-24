@@ -3,6 +3,7 @@ import { getRepo } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 import { NextFunction } from "express";
+import { finalPrice } from "@helpers";
 
 export async function getProducts(
   req: TRequest,
@@ -71,13 +72,21 @@ export async function getProducts(
 
     const [products, total] = await query.getManyAndCount();
 
+    const productsWithDiscount = products.map((product) => ({
+      ...product,
+      finalPrice: finalPrice(
+        Number(product.price),
+        Number(product.discount || 0)
+      ),
+    }));
+
     res.status(200).json({
       message: "Products fetched successfully",
       page,
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      products,
+      products:productsWithDiscount,
     });
   } catch (error) {
     next(error);
@@ -133,9 +142,17 @@ export async function getProduct(
     if (!product) {
       return res.status(404).json({ message: "Product does not exist" });
     }
-    res
-      .status(200)
-      .json({ message: "Product fetched successfully", product: product });
+    const discountedPrice = finalPrice(
+      Number(product.price),
+      Number(product.discount || 0),
+    );
+    res.status(200).json({
+      message: "Product fetched successfully",
+      product: {
+        ...product,
+        finalPrice: discountedPrice,
+      },
+    });
   } catch (error) {
     next(error);
   }
@@ -261,9 +278,12 @@ export async function getCart(
     });
 
     if (!cart) {
-      return res
-        .status(200)
-        .json({ message: "No products in the cart", cart: [] });
+      return res.status(200).json({
+        message: "No products in the cart",
+        cart: [],
+        totalItems: 0,
+        subtotal: 0,
+      });
     }
 
     const cartItems = await cartItemRepo.find({
@@ -275,17 +295,34 @@ export async function getCart(
       },
     });
 
-    const totalItems = cartItems.reduce((acc, item) => {
-      return acc + item.quantity;
-    }, 0);
+    if (!cartItems.length) {
+      return res.status(200).json({
+        message: "No products in the cart",
+        cart: [],
+        totalItems: 0,
+        subtotal: 0,
+      });
+    }
 
-    const subtotal = cartItems.reduce((acc, item) => {
-      return acc + item.quantity * item.product.price;
-    }, 0);
+    const cartWithPricing = cartItems.map((item) => {
+    const final_price = Math.round(finalPrice(item.product.price, item.product.discount) * 100) / 100;
+      return {
+        ...item,
+        product: {
+          ...item.product,
+          final_price,
+        },
+        total_price: Math.round(final_price * item.quantity * 100) / 100,
+      };
+    });
+
+    const totalItems = cartWithPricing.reduce((acc, item) => acc + item.quantity, 0);
+
+    const subtotal = Math.round(cartWithPricing.reduce((acc, item) => acc + item.total_price, 0) * 100) / 100;
 
     return res.status(200).json({
       message: "Cart fetched successfully",
-      cart: cartItems,
+      cart: cartWithPricing,
       totalItems,
       subtotal,
     });

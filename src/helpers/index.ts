@@ -10,3 +10,4 @@ export * from "./route-initializer";
 export * from "./typeorm.repository";
 export * from "./sendEmail";
 export * from "./uploadToCloudinary"
+export * from "./product.discount.helper"

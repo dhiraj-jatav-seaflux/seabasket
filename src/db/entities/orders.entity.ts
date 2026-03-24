@@ -9,7 +9,7 @@ import {
   UpdateDateColumn
 } from "typeorm";
 
-import { Status } from "@types";
+import { PaymentMode, Status } from "@types";
 import { OrderItemsEntity } from "@entities";
 import { UserEntity } from "@entities";
 
@@ -22,6 +22,9 @@ export class OrderEntity {
   @Column({ type: "int", nullable: false })
   user_id: number;
 
+  @Column({type:'varchar', length:255, nullable:true, unique:true})
+  stripe_session_id:string
+
   @Column({ type: "decimal", precision: 10, scale: 2, nullable: false })
   total_amount: number;
 
@@ -31,6 +34,21 @@ export class OrderEntity {
     default: Status.PENDING
   })
   status: Status;
+
+  @Column({type:"enum", enum:PaymentMode, default:PaymentMode.COD})
+  payment_mode:PaymentMode;
+
+  @Column({type:'text', nullable:false})
+  delivery_address:string
+
+  @Column({type:"varchar", length:100, nullable:false})
+  city:string
+
+  @Column({type:"varchar", length:6, nullable:false})
+  pincode:string
+
+  @Column({type:"varchar", length:100, nullable:false})
+  state:string
 
   @CreateDateColumn()
   created_at: Date;
