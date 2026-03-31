@@ -1,9 +1,15 @@
-import { CartsEntity, CategoriesEntity, ProductsEntity } from "@entities";
+import {
+  CartsEntity,
+  CategoriesEntity,
+  ProductsEntity,
+  ReviewsEntity,
+} from "@entities";
 import { getRepo } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 import { NextFunction } from "express";
-import { finalPrice } from "@helpers";
+import { finalDiscountPrice } from "@helpers";
+import { TRatingDTO } from "./dtos/rating-dto";
 
 export async function getProducts(
   req: TRequest,
@@ -44,19 +50,35 @@ export async function getProducts(
       query.andWhere("product.is_trending = :isTrending", { isTrending });
     }
 
-    if (minPrice) {
-      query.andWhere("product.price >= :minPrice", { minPrice });
+    if (Number(minPrice) > 0) {
+      query.andWhere(
+        "(product.price - (product.price * product.discount / 100)) >= :minPrice",
+        { minPrice: Number(minPrice) },
+      );
     }
 
-    if (maxPrice) {
-      query.andWhere("product.price <= :maxPrice", { maxPrice });
+    if (Number(maxPrice) > 0) {
+      query.andWhere(
+        "(product.price - (product.price * product.discount / 100)) <= :maxPrice",
+        { maxPrice: Number(maxPrice) },
+      );
     }
 
-    if (minRating) {
+    if (
+      minRating &&
+      minRating !== undefined &&
+      minRating !== null &&
+      minRating !== "0"
+    ) {
       query.andWhere("product.rating >= :minRating", { minRating });
     }
 
-    if (minDiscount) {
+    if (
+      minDiscount &&
+      minDiscount !== undefined &&
+      minDiscount !== null &&
+      minDiscount !== "0"
+    ) {
       query.andWhere("product.discount >= :minDiscount", { minDiscount });
     }
 
@@ -74,9 +96,9 @@ export async function getProducts(
 
     const productsWithDiscount = products.map((product) => ({
       ...product,
-      finalPrice: finalPrice(
+      finalPrice: finalDiscountPrice(
         Number(product.price),
-        Number(product.discount || 0)
+        Number(product.discount || 0),
       ),
     }));
 
@@ -86,7 +108,7 @@ export async function getProducts(
       limit,
       total,
       totalPages: Math.ceil(total / limit),
-      products:productsWithDiscount,
+      products: productsWithDiscount,
     });
   } catch (error) {
     next(error);
@@ -142,7 +164,7 @@ export async function getProduct(
     if (!product) {
       return res.status(404).json({ message: "Product does not exist" });
     }
-    const discountedPrice = finalPrice(
+    const discountedPrice = finalDiscountPrice(
       Number(product.price),
       Number(product.discount || 0),
     );
@@ -174,249 +196,124 @@ export async function getCategories(
   }
 }
 
-export async function addToCart(
-  req: TRequest,
+export async function addReview(
+  req: TRequest<TRatingDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
-    const { id } = req.me;
     const productId = Number(req.params.productId);
+    const { id } = req.me;
 
-    const cartRepo = getRepo(CartsEntity);
-    const productsRepo = getRepo(ProductsEntity);
-    const cartItemsRepo = getRepo(CartItemsEntity);
+    const { comment, rating } = req.dto;
 
-    const product = await productsRepo.findOne({
+    const productRepo = getRepo(ProductsEntity);
+    const reviewsRepo = getRepo(ReviewsEntity);
+
+    const product = await productRepo.findOne({
       where: { id: productId },
     });
 
     if (!product) {
-      return res.status(404).json({ message: "Product not found" });
+      return res.status(404).json({ message: "Product does not exist" });
     }
 
-    if (product.stock < 1) {
-      return res.status(400).json({
-        message: "Product out of stock",
-      });
-    }
-
-    const userCart = await cartRepo.findOne({
-      where: { user_id: id },
+    const alreadyReviewed = await reviewsRepo.findOne({
+      where: {
+        product_id: productId,
+        user_id: id,
+      },
     });
 
-    if (userCart) {
-      const existingCartItem = await cartItemsRepo.findOne({
-        where: {
-          cart_id: userCart.id,
-          product_id: productId,
-        },
-      });
-
-      if (existingCartItem && existingCartItem.quantity + 1 > product.stock) {
-        return res.status(400).json({
-          message: "Not enough stock",
-        });
-      }
-
-      if (existingCartItem) {
-        existingCartItem.quantity += 1;
-        await cartItemsRepo.save(existingCartItem);
-        return res.status(200).json({
-          message: "Product added successfully",
-          cartItem: existingCartItem,
-        });
-      }
-
-      const newCartItem = cartItemsRepo.create({
-        cart_id: userCart.id,
-        product_id: productId,
-        quantity: 1,
-      });
-
-      await cartItemsRepo.save(newCartItem);
-
+    if (alreadyReviewed) {
       return res
-        .status(200)
-        .json({ message: "Item successfully added", cartItem: newCartItem });
-    } else {
-      const cart = cartRepo.create({
-        user_id: id,
-      });
-
-      await cartRepo.save(cart);
-
-      const newCartItem = cartItemsRepo.create({
-        cart_id: cart.id,
-        product_id: productId,
-        quantity: 1,
-      });
-
-      await cartItemsRepo.save(newCartItem);
-
-      return res
-        .status(200)
-        .json({ message: "Item successfully added", cartItem: newCartItem });
+        .status(409)
+        .json({ message: "Review already added for this product" });
     }
+
+    const review = reviewsRepo.create({
+      product_id: productId,
+      user_id: id,
+      rating: rating,
+      comment,
+    });
+
+    await reviewsRepo.save(review);
+
+    const result = await reviewsRepo
+      .createQueryBuilder("review")
+      .select("AVG(review.rating)", "avg")
+      .where("review.product_id = :productId", { productId })
+      .getRawOne();
+
+    product.rating = Number(result.avg) || 0;
+
+    await productRepo.save(product);
+
+    res.status(200).json({ message: "Review added", review: review });
   } catch (error) {
     next(error);
   }
 }
 
-export async function getCart(
-  req: TRequest,
+export async function updateReview(
+  req: TRequest<TRatingDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
     const { id } = req.me;
-    const cartRepo = getRepo(CartsEntity);
-    const cartItemRepo = getRepo(CartItemsEntity);
+    const reviewId = Number(req.params.reviewId);
 
-    const cart = await cartRepo.findOne({
-      where: { user_id: id },
+    const { rating, comment } = req.dto;
+
+    const reviewRepo = getRepo(ReviewsEntity);
+
+    const review = await reviewRepo.findOne({
+      where: { id: reviewId, user_id: id },
     });
 
-    if (!cart) {
-      return res.status(200).json({
-        message: "No products in the cart",
-        cart: [],
-        totalItems: 0,
-        subtotal: 0,
-      });
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
     }
 
-    const cartItems = await cartItemRepo.find({
-      where: { cart_id: cart.id },
-      relations: {
-        product: {
-          images: true,
-        },
-      },
-    });
+    review.rating = rating;
+    review.comment = comment;
 
-    if (!cartItems.length) {
-      return res.status(200).json({
-        message: "No products in the cart",
-        cart: [],
-        totalItems: 0,
-        subtotal: 0,
-      });
-    }
-
-    const cartWithPricing = cartItems.map((item) => {
-    const final_price = Math.round(finalPrice(item.product.price, item.product.discount) * 100) / 100;
-      return {
-        ...item,
-        product: {
-          ...item.product,
-          final_price,
-        },
-        total_price: Math.round(final_price * item.quantity * 100) / 100,
-      };
-    });
-
-    const totalItems = cartWithPricing.reduce((acc, item) => acc + item.quantity, 0);
-
-    const subtotal = Math.round(cartWithPricing.reduce((acc, item) => acc + item.total_price, 0) * 100) / 100;
-
-    return res.status(200).json({
-      message: "Cart fetched successfully",
-      cart: cartWithPricing,
-      totalItems,
-      subtotal,
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function deleteCartItem(
-  req: TRequest,
-  res: TResponse,
-  next: NextFunction,
-) {
-  try {
-    const { id } = req.me;
-    const productId = Number(req.params.productId);
-
-    const cartRepo = getRepo(CartsEntity);
-    const cartItemsRepo = getRepo(CartItemsEntity);
-
-    const cart = await cartRepo.findOne({
-      where: {
-        user_id: id,
-      },
-    });
-
-    if (!cart) {
-      return res.status(404).json({ message: "Cart not found" });
-    }
-
-    const cartItem = await cartItemsRepo.findOne({
-      where: {
-        cart_id: cart.id,
-        product_id: productId,
-      },
-    });
-
-    if (!cartItem) {
-      return res.status(400).json({ message: "Item doesn't exist" });
-    }
-
-    await cartItemsRepo.remove(cartItem);
+    await reviewRepo.save(review);
 
     return res
       .status(200)
-      .json({ message: "Product removed from cart", cartItem });
+      .json({ message: "Review updated successfully", updatedReview: review });
   } catch (error) {
     next(error);
   }
 }
 
-export async function updateCartItemQuantity(
+export async function deleteReview(
   req: TRequest,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
     const { id } = req.me;
-    const productId = Number(req.params.productId);
-    const cartsRepo = getRepo(CartsEntity);
-    const cartItemsRepo = getRepo(CartItemsEntity);
+    const reviewId = Number(req.params.reviewId);
 
-    const userCart = await cartsRepo.findOne({
-      where: { user_id: id },
+    const reviewRepo = getRepo(ReviewsEntity);
+
+    const review = await reviewRepo.findOne({
+      where: { id: reviewId, user_id: id },
     });
 
-    if (!userCart) {
-      return res.status(404).json({ message: "Cart not found" });
+    if (!review) {
+      return res.status(404).json({ message: "Review not found" });
     }
 
-    const updatedProduct = await cartItemsRepo.findOne({
-      where: { cart_id: userCart.id, product_id: productId },
-    });
+    await reviewRepo.delete(review);
 
-    if (!updatedProduct) {
-      return res.status(404).json({ message: "Product in cart not found" });
-    }
-
-    if (updatedProduct.quantity === 1) {
-      await cartItemsRepo.remove(updatedProduct);
-      return res.status(200).json({
-        message: "Product removed from the cart",
-        updatedProduct: updatedProduct,
-      });
-    }
-
-    updatedProduct.quantity = updatedProduct.quantity - 1;
-
-    await cartItemsRepo.save(updatedProduct);
-
-    return res.status(200).json({
-      message: "Cart updated successfully",
-      updatedProduct: updatedProduct,
-    });
+    return res
+      .status(200)
+      .json({ message: "Review deleted successfully", deletedReview: review });
   } catch (error) {
     next(error);
   }

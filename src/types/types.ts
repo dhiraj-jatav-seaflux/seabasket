@@ -20,7 +20,7 @@ export interface DecodedIdToken {
 }
 
 export interface TRequest<T = any> extends Request {
-  isAdmin?:T
+  // isAdmin?:T
   me?: UserEntity;
   dto?: T;
   files: any;

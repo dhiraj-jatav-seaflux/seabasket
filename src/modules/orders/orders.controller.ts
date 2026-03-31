@@ -5,25 +5,24 @@ import {
   OrderItemsEntity,
   ProductsEntity,
 } from "@entities";
-import { finalPrice, getRepo } from "@helpers";
+import { finalDiscountPrice, getRepo } from "@helpers";
 import { PaymentMode, Status, TRequest, TResponse } from "@types";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 import { NextFunction } from "express";
 import Stripe from "stripe";
-import { OrderDTO } from "./dtos";
+import { TOrderDTO } from "./dtos";
 import { getDB } from "@db";
 
 export async function checkout(
-  req: TRequest,
+  req: TRequest<TOrderDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
     const { id } = req.me;
 
-    const parsed = OrderDTO.parse(req.body);
-
-    const { isSingle, productId, address, city, state, pincode, paymentMode } = parsed;
+    const { isSingle, productId, address, city, state, pincode, paymentMode } =
+      req.dto;
 
     const productRepo = getRepo(ProductsEntity);
     const orderItemsRepo = getRepo(OrderItemsEntity);
@@ -43,18 +42,23 @@ export async function checkout(
         return res.status(404).json({ message: "Product not found" });
       }
 
-      const totalAmount = Number(product.price);
+      const finalPrice =
+        Math.round(finalDiscountPrice(product.price, product.discount) * 100) /
+        100;
 
-      if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
+      if (finalPrice < Constants.MINIMUM_ORDER_AMOUNT) {
         return res
           .status(400)
           .json({ message: "Product amount should be 50 for single product" });
       }
 
       if (paymentMode === PaymentMode.COD) {
+        if(product.stock === 0){
+          return res.status(400).json({message:'Product out of stock'})
+        }
         const order = ordersRepo.create({
           user_id: id,
-          total_amount: totalAmount,
+          total_amount: finalPrice,
           delivery_address: address,
           city,
           state,
@@ -67,18 +71,20 @@ export async function checkout(
         const orderItem = orderItemsRepo.create({
           order_id: order.id,
           product_id: productId,
-          price: totalAmount,
+          price: finalPrice,
+          quantity: 1,
         });
 
         await orderItemsRepo.save(orderItem);
 
+        product.stock = product.stock - 1;
+        await productRepo.save(product);
+
         return res.status(200).json({ message: "Order placed", order: order });
       }
 
-      const final_price = Math.round(finalPrice(product.price, product.discount) * 100) / 100;
-
       const paymentIntent = await stripe.paymentIntents.create({
-        amount: Math.round(final_price * 100),
+        amount: Math.round(finalPrice * 100),
         currency: "inr",
         metadata: {
           userId: id.toString(),
@@ -115,9 +121,12 @@ export async function checkout(
       }
 
       const totalAmount = cartItems.reduce((sum, item) => {
-        const final_price = Math.round(finalPrice(item.product.price, item.product.discount) * 100) / 100;
+        const finalPrice =
+          Math.round(
+            finalDiscountPrice(item.product.price, item.product.discount) * 100,
+          ) / 100;
 
-        return sum + final_price * item.quantity;
+        return sum + finalPrice * item.quantity;
       }, 0);
 
       if (totalAmount < Constants.MINIMUM_ORDER_AMOUNT) {
@@ -127,6 +136,43 @@ export async function checkout(
       }
 
       if (paymentMode === PaymentMode.COD) {
+
+        const updatedItems = [];
+
+        for (const item of cartItems) {
+          const result = await productRepo
+            .createQueryBuilder()
+            .update(ProductsEntity)
+            .set({
+              stock: () => `stock - ${item.quantity}`,
+            })
+            .where("id = :id", { id: item.product_id })
+            .andWhere("stock >= :qty", { qty: item.quantity })
+            .execute();
+
+          if (result.affected === 0) {
+            for (const updated of updatedItems) {
+              await productRepo
+                .createQueryBuilder()
+                .update(ProductsEntity)
+                .set({
+                  stock: () => `stock + ${updated.quantity}`,
+                })
+                .where("id = :id", { id: updated.product_id })
+                .execute();
+            }
+
+            return res.status(400).json({
+              message: `Insufficient stock for product ${item.product.name}`,
+            });
+          }
+
+          updatedItems.push({
+            product_id: item.product_id,
+            quantity: item.quantity,
+          });
+        }
+
         const order = ordersRepo.create({
           user_id: id,
           total_amount: totalAmount,
@@ -140,14 +186,15 @@ export async function checkout(
         await ordersRepo.save(order);
 
         const orderItems = cartItems.map((item) => {
-          const final_price =
+          const finalPrice =
             Math.round(
-              finalPrice(item.product.price, item.product.discount) * 100,
+              finalDiscountPrice(item.product.price, item.product.discount) *
+                100,
             ) / 100;
           return orderItemsRepo.create({
             order_id: order.id,
             product_id: item.product_id,
-            price: final_price,
+            price: finalPrice,
             quantity: item.quantity,
           });
         });
@@ -257,9 +304,24 @@ export async function stripeWebHook(
 
             if (!product) throw new Error("Product not found");
 
+            const result = await productRepo
+              .createQueryBuilder()
+              .update(ProductsEntity)
+              .set({
+                stock: () => `stock - 1`,
+              })
+              .where("id = :id", { id: Number(productId) })
+              .andWhere("stock >= :qty", { qty: 1 })
+              .execute();
+
+            if (result.affected === 0) {
+              throw new Error("Insufficient stock for product");
+            }
+
             const final_price =
-              Math.round(finalPrice(product.price, product.discount) * 100) /
-              100;
+              Math.round(
+                finalDiscountPrice(product.price, product.discount) * 100,
+              ) / 100;
 
             totalAmount = final_price;
 
@@ -284,7 +346,10 @@ export async function stripeWebHook(
             totalAmount = cartItems.reduce((sum, item) => {
               const final_price =
                 Math.round(
-                  finalPrice(item.product.price, item.product.discount) * 100,
+                  finalDiscountPrice(
+                    item.product.price,
+                    item.product.discount,
+                  ) * 100,
                 ) / 100;
 
               return sum + final_price * item.quantity;
@@ -293,7 +358,10 @@ export async function stripeWebHook(
             orderItems = cartItems.map((item) => {
               const final_price =
                 Math.round(
-                  finalPrice(item.product.price, item.product.discount) * 100,
+                  finalDiscountPrice(
+                    item.product.price,
+                    item.product.discount,
+                  ) * 100,
                 ) / 100;
 
               return orderItemsRepo.create({
@@ -302,6 +370,24 @@ export async function stripeWebHook(
                 quantity: item.quantity,
               });
             });
+
+            for (const item of cartItems) {
+              const result = await productRepo
+                .createQueryBuilder()
+                .update(ProductsEntity)
+                .set({
+                  stock: () => `stock - ${item.quantity}`,
+                })
+                .where("id = :id", { id: item.product_id })
+                .andWhere("stock >= :qty", { qty: item.quantity })
+                .execute();
+
+              if (result.affected === 0) {
+                throw new Error(
+                  `Insufficient stock for product ${item.product.name}`
+                );
+              }
+            }
 
             await cartItemsRepo.delete({ cart_id: Number(cartId) });
           }
@@ -358,7 +444,7 @@ export async function getOrders(
         },
       },
       order: {
-        id: "DESC"
+        id: "DESC",
       },
     });
 

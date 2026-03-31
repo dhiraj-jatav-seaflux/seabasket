@@ -16,7 +16,7 @@ import {
 } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { NextFunction } from "express";
-import { RatingDTO, TSignInUserDTO, TSignUpUserDTO } from "./dtos";
+import { TEmailUserDTO, TOTPUserDTO, TPasswordDTO, TSignInUserDTO, TSignUpUserDTO,TUpdateUserDTO } from "./dtos";
 import { sendEmail } from "@helpers";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
 
@@ -143,12 +143,12 @@ export async function signInUser(
 }
 
 export async function verifyLoginOtp(
-  req: TRequest,
+  req: TRequest<TOTPUserDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
-    const { otp, cartItems } = req.body;
+    const { otp, cartItems } = req.dto;
     const token = req.headers.authorization?.split(" ")[1];
 
     const cartsRepo = getRepo(CartsEntity);
@@ -185,7 +185,7 @@ export async function verifyLoginOtp(
 
     if (cartItems && cartItems.length > 0) {
       const userCart = await cartsRepo.findOne({
-        where: { id: user.id },
+        where: { user_id: user.id },
       });
 
       if (!userCart) {
@@ -250,7 +250,7 @@ export async function verifyLoginOtp(
       data: {
         id: user.id,
         email: user.email,
-        token: encode({ id: user.id, email: user.email, role: user.role }),
+        token: encode({ id: user.id, email: user.email, role: user.role, message:process.env.TOKEN_SECRET_MESSAGE}),
       },
     });
   } catch (err) {
@@ -308,12 +308,12 @@ export async function resendOtp(
 }
 
 export async function forgotPassword(
-  req: TRequest,
+  req: TRequest<TEmailUserDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
-    const { email } = req.body;
+    const { email } = req.dto;
 
     const userRepository = getRepo(UserEntity);
 
@@ -344,12 +344,12 @@ export async function forgotPassword(
 }
 
 export async function resetPassword(
-  req: TRequest,
+  req: TRequest<TPasswordDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
-    const { password, token } = req.body;
+    const { password, token } = req.dto;
     const userRepository = getRepo(UserEntity);
     const user = await userRepository.findOne({
       where: { reset_token: token },
@@ -412,7 +412,7 @@ export async function getUser(
 }
 
 export async function updateUser(
-  req: TRequest,
+  req: TRequest<TUpdateUserDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
@@ -463,66 +463,6 @@ export async function updateUser(
     await userRepository.save(user);
 
     res.status(200).json({ message: "User updated successfully" });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export async function addReview(
-  req: TRequest,
-  res: TResponse,
-  next: NextFunction,
-) {
-  try {
-    const productId = Number(req.params.productId);
-    const { id } = req.me;
-
-    const { comment, rating } = RatingDTO.parse(req.body);
-
-    const productRepo = getRepo(ProductsEntity);
-    const reviewsRepo = getRepo(ReviewsEntity);
-
-    const product = await productRepo.findOne({
-      where: { id: productId },
-    });
-
-    if (!product) {
-      return res.status(404).json({ message: "Product does not exist" });
-    }
-
-    const alreadyReviewed = await reviewsRepo.findOne({
-      where: {
-        product_id: productId,
-        user_id: id,
-      },
-    });
-
-    if (alreadyReviewed) {
-      return res
-        .status(409)
-        .json({ message: "Review already added for this product" });
-    }
-
-    const review = reviewsRepo.create({
-      product_id: productId,
-      user_id: id,
-      rating: rating,
-      comment,
-    });
-
-    await reviewsRepo.save(review);
-
-    const result = await reviewsRepo
-      .createQueryBuilder("review")
-      .select("AVG(review.rating)", "avg")
-      .where("review.product_id = :productId", { productId })
-      .getRawOne();
-
-    product.rating = Number(result.avg) || 0;
-
-    await productRepo.save(product);
-
-    res.status(200).json({ message: "Review added", review: review });
   } catch (error) {
     next(error);
   }

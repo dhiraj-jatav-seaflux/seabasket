@@ -1,15 +1,13 @@
 import { withRoutes } from "@helpers";
-import { acl, bodyValidator, destructPager } from "@middlewares";
+import { acl, destructPager } from "@middlewares";
 import { Router } from "express";
-import { addToCart, deleteCartItem, getCart, getCategories, getProduct, getProducts, updateCartItemQuantity } from "./products.controller";
+import { getCategories, getProduct, getProducts } from "./products.controller";
+import { reviewRoutes } from "./reviews";
 
 const routes = (app: Router) => {
   app.get("/", destructPager, getProducts);
   app.get("/categories", getCategories);
-  app.get('/cart',acl,getCart);
-  app.post('/cart/:productId',acl,addToCart);
-  app.delete('/cart/:productId',acl,deleteCartItem);
-  app.put('/cart/:productId',acl,updateCartItemQuantity)
+  app.use('/review',reviewRoutes);
   app.get("/:productId", getProduct);
 };
 

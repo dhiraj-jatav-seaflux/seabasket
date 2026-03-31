@@ -7,18 +7,19 @@ import {
 } from "@entities";
 import { getRepo, uploadToCloudinary } from "@helpers";
 import cloudinary from "configs/cloudinary";
+import { TCategoryDTO, TProductDTO } from "./dtos";
 
 export async function postCategory(
-  req: TRequest,
+  req: TRequest<TCategoryDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
   try {
-    const { categoryName } = req.body;
+    const { categoryName } = req.dto;
 
-    if (!req.isAdmin) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    // if (!req.isAdmin) {
+    //   return res.status(403).json({ message: "Forbidden" });
+    // }
 
     const categoryRepository = getRepo(CategoriesEntity);
 
@@ -45,7 +46,7 @@ export async function postCategory(
 }
 
 export async function createProduct(
-  req: TRequest,
+  req: TRequest<TProductDTO>,
   res: TResponse,
   next: NextFunction,
 ) {
@@ -58,7 +59,7 @@ export async function createProduct(
       discount,
       stock,
       isTrending,
-    } = req.body;
+    } = req.dto;
 
     const productRepository = getRepo(ProductsEntity);
     const product = productRepository.create({
@@ -88,9 +89,9 @@ export async function uploadProductImage(
     const imageRepo = getRepo(ProductImagesEntity);
     const files = req.files as Express.Multer.File[];
 
-    if (!req.isAdmin) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    // if (!req.isAdmin) {
+    //   return res.status(403).json({ message: "Forbidden" });
+    // }
 
     const productsRepo = getRepo(ProductsEntity);
 
@@ -137,9 +138,9 @@ export async function deleteProduct(
   try {
     const productId = Number(req.params.productId);
 
-    if (!req.isAdmin) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
+    // if (!req.isAdmin) {
+    //   return res.status(403).json({ message: "Forbidden" });
+    // }
 
     const productRepo = getRepo(ProductsEntity);
     const imagesRepo = getRepo(ProductImagesEntity);

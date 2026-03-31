@@ -7,7 +7,7 @@ export const acl = async (req: TRequest, res: TResponse, next: () => void) => {
 
   const tokenInfo = decode<any>(token);
 
-  if (!tokenInfo) {
+  if (!tokenInfo || tokenInfo.message!==process.env.TOKEN_SECRET_MESSAGE) {
     res.status(401).send({ code: 401, reason: "Unauthorized!" });
     return;
   }
@@ -23,6 +23,6 @@ export const acl = async (req: TRequest, res: TResponse, next: () => void) => {
   }
 
   req.me = user;
-  req.isAdmin = user.role === UserRole.ADMIN;
+  // req.isAdmin = user.role === UserRole.ADMIN;
   next();
 };
