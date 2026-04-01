@@ -6,8 +6,8 @@ import { addReview, deleteReview, updateReview } from "../products.controller";
 
 const routes = (app:Router)=>{
     app.post("/:productId",acl,bodyValidator(RatingDTO),addReview);
-    app.put('/:reviewId',acl,bodyValidator(RatingDTO),updateReview);
-    app.delete('/:reviewId',acl,deleteReview);
+    app.put('/:productId',acl,bodyValidator(RatingDTO),updateReview);
+    app.delete('/:productId',acl,deleteReview);
 }
 
 export const reviewRoutes = withRoutes(routes)

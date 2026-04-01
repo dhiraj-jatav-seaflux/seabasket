@@ -2,6 +2,7 @@ import { CartsEntity, CategoriesEntity, OrderEntity, OrderItemsEntity, ProductIm
 import { envValidator, getLogger } from "@helpers";
 import { DataSource } from "typeorm";
 import { CartItemsEntity } from "./entities/cart-items.entity";
+import { AddressesEntity } from "./entities/addresses.entity";
 
 let dataSource: DataSource | null = null;
 
@@ -21,7 +22,7 @@ export const initializeDB = async () => {
       ssl: {
         rejectUnauthorized: false,
       },
-      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity, ReviewsEntity,CartsEntity,CartItemsEntity, OrderEntity, OrderItemsEntity],
+      entities: [UserEntity,CategoriesEntity,ProductImagesEntity,ProductsEntity, ReviewsEntity,CartsEntity,CartItemsEntity, OrderEntity, OrderItemsEntity, AddressesEntity],
       synchronize:false,
       logging:false
     });

@@ -263,14 +263,23 @@ export async function updateReview(
 ) {
   try {
     const { id } = req.me;
-    const reviewId = Number(req.params.reviewId);
+    const productId = Number(req.params.productId);
 
     const { rating, comment } = req.dto;
 
-    const reviewRepo = getRepo(ReviewsEntity);
+    const reviewsRepo = getRepo(ReviewsEntity);
+    const productRepo = getRepo(ProductsEntity);
 
-    const review = await reviewRepo.findOne({
-      where: { id: reviewId, user_id: id },
+    const product = await productRepo.findOne({
+      where:{id:productId}
+    })
+
+    if(!product){
+      return res.status(404).json({message:'Product does not exist'})
+    }
+
+    const review = await reviewsRepo.findOne({
+      where: { product_id: productId, user_id: id },
     });
 
     if (!review) {
@@ -280,7 +289,17 @@ export async function updateReview(
     review.rating = rating;
     review.comment = comment;
 
-    await reviewRepo.save(review);
+    await reviewsRepo.save(review);
+
+    const result = await reviewsRepo
+      .createQueryBuilder("review")
+      .select("AVG(review.rating)", "avg")
+      .where("review.product_id = :productId", { productId })
+      .getRawOne();
+
+    product.rating = Number(result.avg) || 0;
+
+    await productRepo.save(product);
 
     return res
       .status(200)
@@ -297,19 +316,38 @@ export async function deleteReview(
 ) {
   try {
     const { id } = req.me;
-    const reviewId = Number(req.params.reviewId);
+    const productId = Number(req.params.productId);
 
-    const reviewRepo = getRepo(ReviewsEntity);
+    const reviewsRepo = getRepo(ReviewsEntity);
+    const productRepo = getRepo(ProductsEntity);
 
-    const review = await reviewRepo.findOne({
-      where: { id: reviewId, user_id: id },
+    const product =  await productRepo.findOne({
+      where:{id:productId}
+    })
+
+    if(!product){
+      return res.status(404).json({message:'Product does not exist'})
+    }
+
+    const review = await reviewsRepo.findOne({
+      where: { product_id: productId, user_id: id },
     });
 
     if (!review) {
       return res.status(404).json({ message: "Review not found" });
     }
 
-    await reviewRepo.delete(review);
+    await reviewsRepo.delete(review);
+
+    const result = await reviewsRepo
+      .createQueryBuilder("review")
+      .select("AVG(review.rating)", "avg")
+      .where("review.product_id = :productId", { productId })
+      .getRawOne();
+
+    product.rating = Number(result.avg) || 0;
+
+    await productRepo.save(product);
 
     return res
       .status(200)
