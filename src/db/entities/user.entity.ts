@@ -3,6 +3,7 @@ import { Column, CreateDateColumn, Entity, OneToMany, OneToOne, PrimaryGenerated
 import { ReviewsEntity } from "@entities";
 import { CartsEntity } from "@entities";
 import { OrderEntity } from "@entities";
+import { AddressesEntity } from "./addresses.entity";
 
 @Entity("users")
 export class UserEntity {
@@ -27,29 +28,29 @@ export class UserEntity {
   @Column({type:"enum", enum:UserRole, default:UserRole.USER})
   role:UserRole
 
-  @Column({type:"text", nullable:false})
-  address:string
+  // @Column({type:"text", nullable:false})
+  // address:string
 
-  @Column({type:"varchar", length:100, nullable:false})
-  city:string
+  // @Column({type:"varchar", length:100, nullable:false})
+  // city:string
 
-  @Column({type:"varchar", length:6, nullable:false})
-  pincode:string
+  // @Column({type:"varchar", length:6, nullable:false})
+  // pincode:string
 
-  @Column({type:"varchar", length:100, nullable:false})
-  state:string
+  // @Column({type:"varchar", length:100, nullable:false})
+  // state:string
 
-  @Column({type:"varchar", length:6})
-  login_otp:string
+  @Column({ type: "varchar", length: 6, nullable: true })
+  login_otp: string;
 
-  @Column({type:"timestamp"})
-  login_otp_expiration:Date;
+  @Column({ type: "timestamp", nullable: true })
+  login_otp_expiration: Date;
 
-  @Column({type:"varchar", length:255})
-  reset_token:string
+  @Column({ type: "varchar", length: 255, nullable: true })
+  reset_token: string;
 
-  @Column({type:"timestamp"})
-  reset_token_expiration:Date;
+  @Column({ type: "timestamp", nullable: true })
+  reset_token_expiration: Date;
 
   @CreateDateColumn()
   created_at: Date;
@@ -65,4 +66,7 @@ export class UserEntity {
 
   @OneToMany(() => OrderEntity, (order) => order.user)
   orders: OrderEntity[];
+
+  @OneToMany(() => AddressesEntity, (address) => address.user)
+  addresses: AddressesEntity[];
 }

@@ -1,7 +1,6 @@
 import {
   CartsEntity,
   ProductsEntity,
-  ReviewsEntity,
   UserEntity,
 } from "@entities";
 import {
@@ -16,9 +15,10 @@ import {
 } from "@helpers";
 import { TRequest, TResponse } from "@types";
 import { NextFunction } from "express";
-import { TEmailUserDTO, TOTPUserDTO, TPasswordDTO, TSignInUserDTO, TSignUpUserDTO,TUpdateUserDTO } from "./dtos";
+import { TAddressDTO, TEmailUserDTO, TOTPUserDTO, TPasswordDTO, TSignInUserDTO, TSignUpUserDTO,TUpdateUserDTO } from "./dtos";
 import { sendEmail } from "@helpers";
 import { CartItemsEntity } from "db/entities/cart-items.entity";
+import { AddressesEntity } from "db/entities/addresses.entity";
 
 export async function signUpUser(
   req: TRequest<TSignUpUserDTO>,
@@ -38,6 +38,7 @@ export async function signUpUser(
       state,
     } = req.dto;
     const userRepository = getRepo(UserEntity);
+    const addRepository = getRepo(AddressesEntity);
 
     if(!validatePhoneNumber(phone)){
       return res.status(400).json({message:'Invalid phone number'})
@@ -61,10 +62,10 @@ export async function signUpUser(
       email,
       password: hasedPassword,
       phone,
-      address,
-      city,
-      pincode,
-      state,
+      // address,
+      // city,
+      // pincode,
+      // state,
     });
 
     const otp = generateOTP();
@@ -74,6 +75,16 @@ export async function signUpUser(
     user.login_otp_expiration = expiration;
 
     await userRepository.save(user);
+
+    const userAddress = addRepository.create({
+      user_id:user.id,
+      address,
+      city,
+      pincode,
+      state,
+    })
+
+    await addRepository.save(userAddress);
 
     await sendEmail(user.email, otp);
 
@@ -388,10 +399,7 @@ export async function getUser(
       last_name,
       email,
       phone,
-      address,
-      city,
-      pincode,
-      state,
+      addresses
     } = req.me;
     res.status(200).json({
       data: {
@@ -400,10 +408,7 @@ export async function getUser(
         last_name,
         email,
         phone,
-        address,
-        city,
-        pincode,
-        state,
+        addresses
       },
     });
   } catch (err) {
@@ -417,7 +422,7 @@ export async function updateUser(
   next: NextFunction,
 ) {
   const { id } = req.me;
-  const { first_name, last_name, email, phone, address, city, pincode, state } =
+  const { first_name, last_name, phone } =
     req.dto;
 
   try {
@@ -431,17 +436,17 @@ export async function updateUser(
       return res.status(400).json({ message: "User does not exist" });
     }
 
-    const existingUserEmail = await userRepository.findOne({
-      where: { email },
-    });
+    // const existingUserEmail = await userRepository.findOne({
+    //   where: { email },
+    // });
 
     const existingUserPhone = await userRepository.findOne({
       where: { phone },
     });
 
-    if (existingUserEmail && existingUserEmail.id != id) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
+    // if (existingUserEmail && existingUserEmail.id != id) {
+    //   return res.status(400).json({ message: "Email already exists" });
+    // }
 
     if (existingUserPhone && existingUserPhone.id != id) {
       return res.status(400).json({ message: "Phone number already exists" });
@@ -453,16 +458,111 @@ export async function updateUser(
 
     user.first_name = first_name;
     user.last_name = last_name;
-    user.address = address;
-    user.city = city;
-    user.email = email;
-    user.pincode = pincode;
+    // user.address = address;
+    // user.city = city;
+    // user.email = email;
+    // user.pincode = pincode;
     user.phone = phone;
-    user.state = state;
+    // user.state = state;
 
     await userRepository.save(user);
 
     res.status(200).json({ message: "User updated successfully" });
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function addAddress(req:TRequest<TAddressDTO>,res:TResponse,next:NextFunction){
+  try {
+    const {id} = req.me;
+    const {address,city,pincode,state} = req.dto
+    const addRepo = getRepo(AddressesEntity);
+
+    const newAddress = addRepo.create({
+      user_id:id,
+      address,
+      city,
+      pincode,
+      state
+    });
+
+    await addRepo.save(newAddress);
+
+    return res.status(201).json({message:'Address created successfully',add:newAddress});
+  } catch (error) {
+    next(Error);
+  }
+}
+
+export async function updateAddress(req:TRequest<TAddressDTO>,res:TResponse,next:NextFunction){
+  try {
+    const {id} = req.me;
+    const addressId = Number(req.params.addressId);
+
+    const {address,city,pincode,state} = req.dto
+
+    if(!addressId){
+      return res.status(400).json({message:'Invalid request'});
+    }
+
+    const addRepo = getRepo(AddressesEntity);
+
+    const updatingAddress = await addRepo.findOne({
+      where:{user_id:id,id:addressId}
+    })
+
+    if(!updatingAddress){
+      return res.status(404).json({message:'Address not found'});
+    }
+
+    updatingAddress.address = address;
+    updatingAddress.city = city;
+    updatingAddress.pincode = pincode;
+    updatingAddress.state = state;
+
+    await addRepo.save(updatingAddress);
+
+    return res.status(200).json({message:'Address updated successfully'})
+  } catch (error) {
+    next(error);
+  }
+}
+
+export async function deleteAddress(
+  req: TRequest,
+  res: TResponse,
+  next: NextFunction
+) {
+  try {
+    const { id } = req.me;
+    const addressId = Number(req.params.addressId);
+
+    const addRepo = getRepo(AddressesEntity);
+
+    const totalAddresses = await addRepo.count({
+      where: { user_id: id },
+    });
+
+    if (totalAddresses <= 1) {
+      return res.status(400).json({
+        message: "You must have at least one address",
+      });
+    }
+
+    const address = await addRepo.findOne({
+      where: { id: addressId, user_id: id },
+    });
+
+    if (!address) {
+      return res.status(404).json({ message: "Address not found" });
+    }
+
+    await addRepo.delete(addressId);
+
+    return res
+      .status(200)
+      .json({ message: "Address deleted successfully" });
   } catch (error) {
     next(error);
   }

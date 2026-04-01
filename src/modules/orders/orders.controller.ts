@@ -12,6 +12,7 @@ import { NextFunction } from "express";
 import Stripe from "stripe";
 import { TOrderDTO } from "./dtos";
 import { getDB } from "@db";
+import { AddressesEntity } from "db/entities/addresses.entity";
 
 export async function checkout(
   req: TRequest<TOrderDTO>,
@@ -21,14 +22,22 @@ export async function checkout(
   try {
     const { id } = req.me;
 
-    const { isSingle, productId, address, city, state, pincode, paymentMode } =
-      req.dto;
+    const { isSingle, productId, paymentMode, addressId } = req.dto;
 
     const productRepo = getRepo(ProductsEntity);
     const orderItemsRepo = getRepo(OrderItemsEntity);
     const cartsRepo = getRepo(CartsEntity);
     const cartItemsRepo = getRepo(CartItemsEntity);
     const ordersRepo = getRepo(OrderEntity);
+    const addRepo = getRepo(AddressesEntity);
+
+    const address = await addRepo.findOne({
+      where: { id: addressId },
+    });
+
+    if (!address) {
+      return res.status(404).json({ message: "Address not found" });
+    }
 
     if (isSingle) {
       if (!productId) {
@@ -53,16 +62,17 @@ export async function checkout(
       }
 
       if (paymentMode === PaymentMode.COD) {
-        if(product.stock === 0){
-          return res.status(400).json({message:'Product out of stock'})
+        if (product.stock === 0) {
+          return res.status(400).json({ message: "Product out of stock" });
         }
         const order = ordersRepo.create({
           user_id: id,
+          address_id: address.id,
           total_amount: finalPrice,
-          delivery_address: address,
-          city,
-          state,
-          pincode,
+          delivery_address: address.address,
+          city: address.city,
+          state: address.state,
+          pincode: address.pincode,
           payment_mode: paymentMode,
         });
 
@@ -89,11 +99,12 @@ export async function checkout(
         metadata: {
           userId: id.toString(),
           productId: productId?.toString() || "",
+          addressId: address?.id.toString() || "",
           isSingle: isSingle ? "true" : "false",
-          address,
-          city,
-          state,
-          pincode,
+          address: address.address,
+          city: address.city,
+          state: address.state,
+          pincode: address.pincode,
         },
       });
 
@@ -136,7 +147,6 @@ export async function checkout(
       }
 
       if (paymentMode === PaymentMode.COD) {
-
         const updatedItems = [];
 
         for (const item of cartItems) {
@@ -175,11 +185,12 @@ export async function checkout(
 
         const order = ordersRepo.create({
           user_id: id,
+          address_id: address.id,
           total_amount: totalAmount,
-          delivery_address: address,
-          city,
-          pincode,
-          state,
+          delivery_address: address.address,
+          city: address.city,
+          pincode: address.pincode,
+          state: address.state,
           payment_mode: paymentMode,
         });
 
@@ -212,12 +223,13 @@ export async function checkout(
         metadata: {
           userId: id.toString(),
           productId: productId?.toString() || "",
+          addressId: address?.id.toString() || "",
           cartId: cart?.id?.toString() || "",
           isSingle: isSingle ? "true" : "false",
-          address,
-          city,
-          state,
-          pincode,
+          address: address.address,
+          city: address.city,
+          state: address.state,
+          pincode: address.pincode,
         },
       });
 
@@ -258,6 +270,7 @@ export async function stripeWebHook(
         const {
           userId,
           productId,
+          addressId,
           cartId,
           isSingle,
           address,
@@ -265,7 +278,6 @@ export async function stripeWebHook(
           state,
           pincode,
         } = paymentIntent.metadata;
-
         const stripePaymentId = paymentIntent.id;
 
         if (!address || !city || !pincode || !state) {
@@ -298,6 +310,7 @@ export async function stripeWebHook(
             if (!productId) {
               throw new Error("Invalid productId");
             }
+
             const product = await productRepo.findOne({
               where: { id: Number(productId) },
             });
@@ -384,7 +397,7 @@ export async function stripeWebHook(
 
               if (result.affected === 0) {
                 throw new Error(
-                  `Insufficient stock for product ${item.product.name}`
+                  `Insufficient stock for product ${item.product.name}`,
                 );
               }
             }
@@ -394,6 +407,7 @@ export async function stripeWebHook(
 
           const order = orderRepo.create({
             user_id: Number(userId),
+            address_id: Number(addressId),
             total_amount: totalAmount,
             delivery_address: address,
             city,
@@ -442,6 +456,7 @@ export async function getOrders(
         items: {
           product: true,
         },
+        address: true,
       },
       order: {
         id: "DESC",
@@ -475,6 +490,7 @@ export async function getOrder(
       where: { id: orderId, user_id: id },
       relations: {
         items: true,
+        address: true,
       },
     });
     if (!order) {

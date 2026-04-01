@@ -15,6 +15,9 @@ export const acl = async (req: TRequest, res: TResponse, next: () => void) => {
   const userRepository = getRepo(UserEntity);
   const user = await userRepository.findOne({
     where: { id: tokenInfo.id },
+    relations:{
+      addresses:true
+    }
   });
 
   if (!user) {

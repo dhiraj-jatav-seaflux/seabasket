@@ -4,4 +4,5 @@ export * from "./otp-user-req-dto";
 export * from "./validate-email.dto";
 export * from "./password-dto";
 export * from "../../products/dtos/rating-dto";
-export * from "./update-user.dto"
+export * from "./update-user.dto";
+export * from './address.dto';
